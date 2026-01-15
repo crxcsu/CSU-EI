@@ -1,0 +1,43 @@
+{
+    "device": "cuda",
+    "roberta_tokenizer_path": "model/tokenizer-smiles-roberta",
+    "model_config": {
+        "roberta_model_path": "smiles_pretrain/smiles_pretrain_models/roberta_mlm2024-03-14_233215.pth",
+        "vocab_size": 181,
+        "max_position_embeddings": 505,
+        "num_attention_heads": 12,
+        "num_hidden_layers": 6,
+        "type_vocab_size": 1,
+        "smi_dropout": 0.1,
+        "smile_use_esa": true,
+        "smiles_use_gradient_checkpoint": true,
+        "feature_dim": 768,
+        "ms_layer": 6,
+        "ms_n_embed": 768,
+        "ms_n_heads": 12,
+        "ms_dropout": 0.1,
+        "ms_use_esa": true,
+        "ms_use_gradient_checkpoint": true
+    },
+    "dataset_config": {
+        "nist": 23,
+        "smiles_maxlen": 300,
+        "ms_maxpeaks": 100,
+        "data_num": 70
+    },
+    "training_config": {
+        "batch_size": 1024,
+        "n_epochs": 150,
+        "lr": 4.5e-04,
+        "weight_decay": 0.0001,
+        "temperature": 0.1,
+        "alpha_weight": 0.5,
+        "model_save_path": "/checkpoints/trained_model_",
+        "model_save_path_temp": "/checkpoints/trained_model_temp_",
+        "loss_record_path": "/loss_record/loss_record_",
+        "experiment_dir": null,
+        "early_stop": 15,
+        "warm_up_step": 5000,
+        "use_distributed": 3
+    }
+}
