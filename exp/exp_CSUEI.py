@@ -41,7 +41,6 @@ def main(main_path, seed=2023, config_file="config.json"):
         setup_folders(LOG_DIR)
         with open(os.path.join(LOG_DIR, f"config_{time_stamp}.json"), 'w') as f:
             json.dump(config_json, f, indent=True)
-        
     else:
         LOG_DIR = os.path.join(main_path, config_json["training_config"]["experiment_dir"])
         print('continue training in existing folder:', LOG_DIR)
@@ -69,6 +68,9 @@ def main(main_path, seed=2023, config_file="config.json"):
         train(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
     else:
         train_DDP(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
+    
+    with open(os.path.join(main_path, 'configs', f"config_{time_stamp}.json"), 'w') as f:
+        json.dump(config_json, f, indent=True)
 
 
 def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
