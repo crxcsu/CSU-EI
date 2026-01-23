@@ -273,7 +273,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     # warm up 和 学习率衰减
     # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
     #                                             num_training_steps=total_steps, num_cycles=20)  # restart 重新恢复学习率
-    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=int(config["warm_up_step"]/world_size),
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
                                                 num_training_steps=len(train_loader)*n_epochs)
 
     scaler = GradScaler()   # 用于混合精度训练

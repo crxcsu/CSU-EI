@@ -78,7 +78,7 @@ class SmilesModel(nn.Module):
         
         self.smiles_model = RobertaModel(config=self.smiles_config, add_pooling_layer=False)# 第二个参数也会影响到指标
 
-        if roberta_model_path is not None and os.path.exists(roberta_model_path):
+        if roberta_model_path is not None:
             pretrain_roberta_model_dict = torch.load(roberta_model_path)
             self.smiles_model.load_state_dict(pretrain_roberta_model_dict, strict=False)
             print('load pretrain smiles model success')
