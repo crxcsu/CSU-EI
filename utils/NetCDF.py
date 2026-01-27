@@ -84,6 +84,14 @@ class netcdf_reader:
                 mo[i, j - imin, 0:(inds[i + 1] - inds[i])] = ms[inds[i]:inds[i + 1]]
         return np.sum(mo, 2)
 
+def get_mass_data_from_cdf(filename):
+    reader = netcdf_reader(filename)
+    mass_data_num = len(reader.scan_acquisition_time.data)
+    mass_values = np.round(reader.mass_values.data).astype(int)
+    mass_values = mass_values.reshape((mass_data_num, -1))
+    mass_intensity = np.maximum(reader.intensity_values.data.reshape((mass_data_num, -1)), 0)
+    mass_data = np.stack([mass_values, mass_intensity], axis=-1)
+    return mass_data
 
 def plot_ms(ms):
     fig = figure()
@@ -104,3 +112,21 @@ def plot_tic(tic):
     ax.set_ylabel('Intensity', fontsize=12)
     ax.set_title('TIC', fontsize=12)
     plt.show()
+
+def data_load(path_data):
+    ncr = netcdf_reader(path_data, True)
+    m = np.array(ncr.mat(0, len(ncr.tic()['rt']) - 1).T, dtype='float32')
+    rt_all = ncr.tic()['rt']
+    X = m
+    ms = np.array(ncr.mz_rt(10)['mz'], dtype='int')
+    # mz_range = (1, 1000)
+    # mz_min, mz_max = mz_range
+    # mz_dense = np.linspace(int(mz_min), int(mz_max), int(mz_max - mz_min) + 1, dtype=np.float32)
+
+    # X = np.zeros((m.shape[0], mz_max), dtype=np.float32)
+    # for i in range(m.shape[0]):
+    #     itensity_dense = np.zeros_like(mz_dense)
+    #     itensity_dense[ms - mz_min] = m[i]
+    #     X[i] = itensity_dense
+    # X = np.maximum(X, 0)
+    return X, ms, rt_all

@@ -1,16 +1,16 @@
 import torch
-import numpy as np
 import json
 import tqdm
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '2' 
 import csv
-from torch.utils.data import Dataset, DataLoader
-import matplotlib.pyplot as plt
-# from evaluation.evaluate import *
-# from test_code import *
-from model.CSU_EI import CSUEI
-from data_provider.dataset import *
+import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from data_provider.dataset import *
+from model.CSU_EI import CSUEI
+from utils.tools import set_seed
+
 
 # 对向量进行可视化
 # from sklearn.manifold import TSNE
@@ -69,14 +69,14 @@ def get_topk(score, ms_index, k: list):
     return tpk, ranks
 
 def calculate_all_topk(config_path, 
-                       data_path, 
-                       model_path, 
-                       feature_path, 
                        test_index_list_path, 
                        mw_list_path, 
                        formula_index_path, 
                        test_formula_list_path,
-                       top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], use_mass_filter=False, use_formula_filter=False):
+                       top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 
+                       use_mass_filter=False, 
+                       use_formula_filter=False,                        
+                       MAIN_PATH=os.getcwd()):
     """
     calculate_all_topk('models/config.json',
                     'data/all_data',
@@ -90,10 +90,14 @@ def calculate_all_topk(config_path,
                     use_mass_filter=False,
                     use_formula_filter=False)
     """
-    with open(config_path, 'r') as f:
+    set_seed(2023)
+    with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
         config_json = json.loads(f.read())
     # 1 加载模型
     device = config_json['device']
+    exp_dir = config_json["training_config"]["experiment_dir"]
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
+    model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
     model_dict = torch.load(model_path, map_location=device)
     model = CSUEI(**config_json["model_config"])
     model.load_state_dict(model_dict)
@@ -101,14 +105,14 @@ def calculate_all_topk(config_path,
     model.eval()
 
     # 2 计算mainlib all uni feature
-    feature_path =  config_json["training_config"]["experiment_dir"]+'/mainlib_all_uni_feature/mainlib23_smiles_feature.pth'
+    feature_path =  os.path.join(MAIN_PATH, exp_dir, 'mainlib_all_uni_feature/mainlib23_smiles_feature.pth')
     if not os.path.exists(feature_path):
-        mainlib_dataloader = prep_dataloader(nist=config_json["training_config"]["nist"], src_data_path=data_path, 
+        mainlib_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                              config_json=config_json, mode='all', shuffle=False, batch_size=256)
         # mainlib_dataset = NIST17Dataset(data_path, config_json, mode='all', data_end=config_json["dataset_config"]["data_num"])
         # mainlib_dataloader = DataLoader(mainlib_dataset, batch_size=256, shuffle=False, num_workers=0, drop_last=False)
         smiles_list = []
-        for smi, _ in tqdm.tqdm(mainlib_dataloader):
+        for smi, _ in tqdm(mainlib_dataloader):
                 smi[0] = smi[0].to(device)
                 smi[1] = smi[1].to(device)
                 with torch.no_grad():
@@ -122,28 +126,40 @@ def calculate_all_topk(config_path,
     # 3 计算test topk
     top_k = np.zeros(len(top_k_list))
     rank23 = []
-    # test_dataset = NIST17Dataset(data_path, config_json, mode='test', data_end=config_json["dataset_config"]["data_num"])
-    # test_dataloader = DataLoader(test_dataset, batch_size=256, shuffle=False, num_workers=0, drop_last=False)
-    test_dataloader = prep_dataloader(nist=config_json["training_config"]["nist"], src_data_path=data_path, 
+    test_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                      config_json=config_json, mode='test', shuffle=False, batch_size=256)
     
-    for _, ms in tqdm.tqdm(test_dataloader):
+    # --- FIX: Load lists once before the loop ---
+    with open(os.path.join(MAIN_PATH, test_index_list_path), 'r') as f:
+        full_test_index_list = json.load(f)
+    
+    full_test_formula_list_index = None
+    if use_formula_filter:
+        with open(os.path.join(MAIN_PATH, formula_index_path), 'r') as f:
+            formula_index_dict = json.load(f)
+        with open(os.path.join(MAIN_PATH, test_formula_list_path), 'r') as f:
+            test_formula_list = json.load(f)
+        full_test_formula_list_index = [torch.tensor(formula_index_dict[i]).to(device) for i in test_formula_list if i in formula_index_dict]
+
+    current_idx = 0
+    total_samples = len(full_test_index_list)
+
+    for _, ms in tqdm(test_dataloader):
         ms[0], ms[1], ms[2] = ms[0].to(device), ms[1].to(device), ms[2].to(device)
         with torch.no_grad():
             zls,_ = model.ms_encoder(ms)
         ms_feature_tmp = zls / zls.norm(dim=-1, keepdim=True)  # 除以模长，归一化
         score = get_cos_distance(ms_feature_tmp, smiles_feature) # (B, 262157)
         
-        # 取出每个batch的ms_feature在text_index_list中的索引，按顺序从test_index_list依次取一个batch的索引
-        with open(test_index_list_path, 'r') as f:
-            test_index_list = json.load(f)
         B, D = score.shape
-        test_index = torch.tensor(test_index_list[:B]).to(device) # (B)
+        
+        # --- FIX: Slice the correct indices for the current batch ---
+        test_index = torch.tensor(full_test_index_list[current_idx:current_idx+B]).to(device)
         
         # ---------------mw filter------------------
         if use_mass_filter:
             print("use mass filter")
-            with open(mw_list_path, 'r') as f:
+            with open(os.path.join(MAIN_PATH, mw_list_path), 'r') as f:
                 mw_list = json.load(f)
             mw_data = torch.tensor(mw_list).to(device) # (262157)
             mw_data = mw_data.expand(B, D)
@@ -155,25 +171,19 @@ def calculate_all_topk(config_path,
             
         # -----------------formula filter----------------
         if use_formula_filter:
-            print("use formula filter")
-            with open(formula_index_path, 'r') as f:
-                formula_index_dict = json.load(f)
-            with open(test_formula_list_path, 'r') as f:
-                test_formula_list = json.load(f)
-            test_formula_list_index = [torch.tensor(formula_index_dict[i]).to(device) for i in test_formula_list if i in formula_index_dict]
-            test_formula_batch_index = test_formula_list_index[:B]
+            # --- FIX: Slice the correct formula indices ---
+            test_formula_batch_index = full_test_formula_list_index[current_idx:current_idx+B]
             for i, index in enumerate(test_formula_batch_index):
                 score[i, index] += 1
-
-        # 更新test_index_list    
-        test_index_list = test_index_list[B:]
-        test_formula_list_index = test_formula_list_index[B:]
 
         #  计算一个batch的topk
         topk, ranks = get_topk(score, test_index, top_k_list)
         rank23 += ranks
-        topk_np = np.array(topk) * ms_feature_tmp.shape[0] / len(test_index_list)  # 乘以topk权重
+        # --- FIX: Normalize with total sample count ---
+        topk_np = np.array(topk) * B / total_samples  # 乘以topk权重
         top_k += topk_np
+        
+        current_idx += B
 
     # test_pd = pd.read_csv('data/all_data/test23/test_smiles_rank23.csv')
     # test_pd['rank23'] = rank23
