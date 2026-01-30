@@ -15,6 +15,7 @@ from analyzer.core import plot_loss_curve
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
+from analyzer.core import auto_eval_topk
 
 def main(main_path, seed=2023, config_file="config.json"):
     set_seed(seed)
@@ -204,6 +205,8 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         if early_stop_cnt > config['early_stop']:
             break
     print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
+
+    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{model_suffix}.json"))
 
 
 def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):

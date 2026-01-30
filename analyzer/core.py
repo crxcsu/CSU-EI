@@ -2,7 +2,7 @@ import torch
 import json
 import tqdm
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2' 
+# os.environ['CUDA_VISIBLE_DEVICES'] = '2' 
 import csv
 import numpy as np
 import pandas as pd
@@ -38,8 +38,12 @@ from utils.tools import set_seed
 #     with torch.no_grad():
 #         return input_1 @ input_2.t()
 
-# fea_all_topk.py
-#  --------------------计算点积矩阵----------------
+# =============================================================================
+# Section 1: Top-K Calculation Core Functions
+# Originally from: fea_all_topk.py
+# =============================================================================
+
+#  --------------------Calculate Dot Product Matrix----------------
 def get_cos_distance(input_1, input_2):
     with torch.no_grad():
         return input_1 @ input_2.t()
@@ -69,48 +73,43 @@ def get_topk(score, ms_index, k: list):
     return tpk, ranks
 
 def calculate_all_topk(config_path, 
-                       test_index_list_path, 
-                       mw_list_path, 
-                       formula_index_path, 
-                       test_formula_list_path,
+                       test_index_list_path='data/nist23_data/test23/test_index_list.json', 
+                       mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json', 
+                       formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json', 
+                       test_formula_list_path='data/nist23_data/test23/test_formula_list.json',
                        top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 
                        use_mass_filter=False, 
                        use_formula_filter=False,                        
                        MAIN_PATH=os.getcwd()):
-    """
-    calculate_all_topk('models/config.json',
-                    'data/all_data',
-                    'data/model_save/trained_model_6+5_16epoc+512_2024-12-20_093126.pth',
-                    'data/feature/mainlib23_smiles_feature-6+5_16epoc+512_2024-12-20_093126.pth',
-                    'data/all_data/test23/test_index_list.json',
-                    'data/all_data/test23/uni_mainlib23_mw_list.json', 
-                    'data/all_data/test23/uni_mainlib23_formula_index_dict.json', 
-                    'data/all_data/test23/test_formula_list.json',
-                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
-                    use_mass_filter=False,
-                    use_formula_filter=False)
-    """
-    set_seed(2023)
+
     with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
         config_json = json.loads(f.read())
+
     # 1 加载模型
     device = config_json['device']
     exp_dir = config_json["training_config"]["experiment_dir"]
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
-    model_dict = torch.load(model_path, map_location=device)
+    config_json["model_config"]["roberta_model_path"] = None
     model = CSUEI(**config_json["model_config"])
-    model.load_state_dict(model_dict)
+    model_dict = torch.load(model_path, map_location=device)
+    # Handle DDP 'module.' prefix if present
+    new_state_dict = {}
+    for k, v in model_dict.items():
+        if k.startswith('module.'):
+            new_state_dict[k[7:]] = v
+        else:
+            new_state_dict[k] = v
+    model.load_state_dict(new_state_dict, strict=False)
     model = model.to(device)
     model.eval()
 
     # 2 计算mainlib all uni feature
-    feature_path =  os.path.join(MAIN_PATH, exp_dir, 'mainlib_all_uni_feature/mainlib23_smiles_feature.pth')
+    feature_path =  os.path.join(MAIN_PATH, exp_dir, f'mainlib_all_uni_feature/mainlib23_smiles_feature_{time_stamp}.pth')
+    os.makedirs(os.path.dirname(feature_path), exist_ok=True)
     if not os.path.exists(feature_path):
         mainlib_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                              config_json=config_json, mode='all', shuffle=False, batch_size=256)
-        # mainlib_dataset = NIST17Dataset(data_path, config_json, mode='all', data_end=config_json["dataset_config"]["data_num"])
-        # mainlib_dataloader = DataLoader(mainlib_dataset, batch_size=256, shuffle=False, num_workers=0, drop_last=False)
         smiles_list = []
         for smi, _ in tqdm(mainlib_dataloader):
                 smi[0] = smi[0].to(device)
@@ -121,11 +120,11 @@ def calculate_all_topk(config_path,
                 smiles_list.append(smiles_feature_tmp)
         smiles_feature = torch.cat(smiles_list, dim=0)
         torch.save(smiles_feature, feature_path)
-    smiles_feature = torch.load(feature_path)
+    else:
+        print("Feature file detected. Loading pre-computed features...")
+        smiles_feature = torch.load(feature_path)
 
     # 3 计算test topk
-    top_k = np.zeros(len(top_k_list))
-    rank23 = []
     test_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                      config_json=config_json, mode='test', shuffle=False, batch_size=256)
     
@@ -142,6 +141,8 @@ def calculate_all_topk(config_path,
         full_test_formula_list_index = [torch.tensor(formula_index_dict[i]).to(device) for i in test_formula_list if i in formula_index_dict]
 
     current_idx = 0
+    top_k = np.zeros(len(top_k_list))
+    rank23 = []
     total_samples = len(full_test_index_list)
 
     for _, ms in tqdm(test_dataloader):
@@ -150,10 +151,7 @@ def calculate_all_topk(config_path,
             zls,_ = model.ms_encoder(ms)
         ms_feature_tmp = zls / zls.norm(dim=-1, keepdim=True)  # 除以模长，归一化
         score = get_cos_distance(ms_feature_tmp, smiles_feature) # (B, 262157)
-        
         B, D = score.shape
-        
-        # --- FIX: Slice the correct indices for the current batch ---
         test_index = torch.tensor(full_test_index_list[current_idx:current_idx+B]).to(device)
         
         # ---------------mw filter------------------
@@ -171,18 +169,15 @@ def calculate_all_topk(config_path,
             
         # -----------------formula filter----------------
         if use_formula_filter:
-            # --- FIX: Slice the correct formula indices ---
+            print("use formula filter")
             test_formula_batch_index = full_test_formula_list_index[current_idx:current_idx+B]
             for i, index in enumerate(test_formula_batch_index):
                 score[i, index] += 1
-
-        #  计算一个batch的topk
+        
         topk, ranks = get_topk(score, test_index, top_k_list)
         rank23 += ranks
-        # --- FIX: Normalize with total sample count ---
         topk_np = np.array(topk) * B / total_samples  # 乘以topk权重
         top_k += topk_np
-        
         current_idx += B
 
     # test_pd = pd.read_csv('data/all_data/test23/test_smiles_rank23.csv')
@@ -190,8 +185,172 @@ def calculate_all_topk(config_path,
     # test_pd.to_csv('data/all_data/test23/test_smiles_rank23.csv', index=False)
     print(top_k)
 
+def auto_eval_topk(config_path,
+                   MAIN_PATH=os.getcwd(),
+                   test_index_list_path='data/nist23_data/test23/test_index_list.json', 
+                   mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json', 
+                   formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json', 
+                   test_formula_list_path='data/nist23_data/test23/test_formula_list.json',
+                   top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]):
+    """
+    Automated evaluation of Top-K accuracy across three filtering modes:
+    1. No filter (Baseline)
+    2. Mass filter (±5 Da)
+    3. Formula filter
+    
+    Results are aggregated and saved to a CSV file.
 
-# plot_eims.py
+    Args:
+        config_path (str): Path to the experiment configuration JSON file (relative to MAIN_PATH).
+        MAIN_PATH (str): Root directory of the project.
+        test_index_list_path (str): Path to the JSON file containing ground truth indices for the test set.
+        mw_list_path (str): Path to the JSON file containing molecular weights of all library molecules (for mass filtering).
+        formula_index_path (str): Path to the JSON file mapping formulas to library indices (for formula filtering).
+        test_formula_list_path (str): Path to the JSON file containing formulas for the test set molecules.
+        top_k_list (list): List of 'k' values to calculate top-k accuracy for.
+    """
+    
+    # -------------------- 1. Setup & Model Loading --------------------
+    with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
+        config_json = json.loads(f.read())
+
+    device = config_json['device']
+    exp_dir = config_json["training_config"]["experiment_dir"]
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
+    
+    # Initialize and load model
+    model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+    config_json["model_config"]["roberta_model_path"] = None
+    model = CSUEI(**config_json["model_config"])
+    
+    # Load state dict handling DDP wrapper
+    state_dict = torch.load(model_path, map_location=device)
+    new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+    model.load_state_dict(new_state_dict, strict=False)
+    model.to(device).eval()
+
+    # -------------------- 2. Precompute/Load Library Features --------------------
+    feature_dir = os.path.join(MAIN_PATH, exp_dir, 'mainlib_all_uni_feature')
+    feature_path = os.path.join(feature_dir, f'mainlib23_smiles_feature_{time_stamp}.pth')
+    
+    if os.path.exists(feature_path):
+        print("Feature file detected. Loading pre-computed features...")
+        smiles_feature = torch.load(feature_path)
+        
+    else:
+        print("Feature file not found. Computing features...")
+        os.makedirs(feature_dir, exist_ok=True)
+        mainlib_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
+                                         config_json=config_json, mode='all', shuffle=False, batch_size=256)
+        
+        smiles_features_list = []
+        for smi, _ in tqdm(mainlib_loader, desc="Encoding Library SMILES"):
+            smi = [x.to(device) for x in smi]
+            with torch.no_grad():
+                zis, _ = model.smiles_encoder(smi)
+            smiles_features_list.append(zis / zis.norm(dim=-1, keepdim=True))
+            
+        smiles_feature = torch.cat(smiles_features_list, dim=0)
+        torch.save(smiles_feature, feature_path)
+
+    # -------------------- 3. Prepare Metadata for Filters --------------------
+    # Load test indices
+    with open(os.path.join(MAIN_PATH, test_index_list_path), 'r') as f:
+        full_test_index_list = json.load(f)
+
+    # Load and prepare MW data (for Mass Filter)
+    with open(os.path.join(MAIN_PATH, mw_list_path), 'r') as f:
+        mw_data_all = torch.tensor(json.load(f)).to(device)
+
+    # Load and prepare Formula data (for Formula Filter)
+    with open(os.path.join(MAIN_PATH, formula_index_path), 'r') as f:
+        formula_index_dict = json.load(f)
+    with open(os.path.join(MAIN_PATH, test_formula_list_path), 'r') as f:
+        test_formula_list = json.load(f)
+        
+    # Pre-map test formulas to their library indices for fast lookup
+    full_test_formula_indices = []
+    for f_str in test_formula_list:
+        indices = formula_index_dict.get(f_str, [])
+        full_test_formula_indices.append(torch.tensor(indices, device=device))
+
+    # -------------------- 4. Evaluation Loop --------------------
+    test_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
+                                  config_json=config_json, mode='test', shuffle=False, batch_size=256)
+    
+    modes = ['w/o mass filter', 'w/ mass filter ± 5Da', 'w/ formula filter']
+    results = {mode: np.zeros(len(top_k_list)) for mode in modes}
+    
+    current_idx = 0
+    total_samples = len(full_test_index_list)
+
+    for _, ms in tqdm(test_loader, desc="Evaluating"):
+        ms = [x.to(device) for x in ms] # [ms_bin, ms_inten, ms_mw]
+        
+        # Get MS embeddings
+        with torch.no_grad():
+            zls, _ = model.ms_encoder(ms)
+        ms_feature_tmp = zls / zls.norm(dim=-1, keepdim=True)
+        
+        # Calculate Base Similarity Score (Cosine)
+        base_score = get_cos_distance(ms_feature_tmp, smiles_feature)
+        B, D = base_score.shape
+        
+        # Get ground truth indices for this batch
+        batch_test_indices = torch.tensor(full_test_index_list[current_idx:current_idx+B]).to(device)
+
+        # --- Mode 1: No Filter ---
+        topk_1, _ = get_topk(base_score, batch_test_indices, top_k_list)
+        results['w/o mass filter'] += np.array(topk_1) * B
+
+        # --- Mode 2: Mass Filter (± 5Da) ---
+        score_2 = base_score.clone()
+        
+        # Get MW for all library items (expanded to batch)
+        mw_lib_expanded = mw_data_all.expand(B, D)
+        # Get True MW for the query molecules
+        mw_query = mw_data_all[batch_test_indices].unsqueeze(1).expand(B, D)
+        
+        # Apply mask
+        mask = (mw_lib_expanded >= mw_query - 5) & (mw_lib_expanded <= mw_query + 5)
+        score_2[~mask] = -1 # Mask out invalid candidates
+        
+        topk_2, _ = get_topk(score_2, batch_test_indices, top_k_list)
+        results['w/ mass filter ± 5Da'] += np.array(topk_2) * B
+
+        # --- Mode 3: Formula Filter ---
+        score_3 = base_score.clone()
+        
+        batch_formula_indices = full_test_formula_indices[current_idx:current_idx+B]
+        for i, valid_indices in enumerate(batch_formula_indices):
+            if valid_indices.numel() > 0:
+                score_3[i, valid_indices] += 1 # Boost valid formula candidates
+                
+        topk_3, _ = get_topk(score_3, batch_test_indices, top_k_list)
+        results['w/ formula filter'] += np.array(topk_3) * B
+
+        current_idx += B
+
+    # -------------------- 5. Finalize & Save Results --------------------
+    # Normalize accumulated counts by total samples to get average Top-K accuracy
+    for key in results:
+        results[key] /= total_samples
+
+    df = pd.DataFrame.from_dict(results, orient='index', columns=top_k_list)
+    print(df)
+    
+    # Save to CSV
+    save_dir = os.path.join(MAIN_PATH, exp_dir, 'plot_result_analyzer')
+    os.makedirs(save_dir, exist_ok=True)
+    output_path = os.path.join(save_dir, f'topk_evaluation_3modes_{time_stamp}.csv')
+    df.to_csv(output_path)
+    print(f"Results saved to {output_path}")
+
+
+# =============================================================================
+# Section 2: Visualization and Analysis Utilities
+# Originally from: plot_eims.py
+# =============================================================================
 def plot_ms_spectrum(peaks_data):
     if isinstance(peaks_data, str):
         peaks_data = ast.literal_eval(peaks_data)
@@ -236,48 +395,7 @@ def plot_loss_curve(loss_record_csv_path, fig_save_path):
     plt.savefig(fig_save_path, dpi=300)
     # plt.close()
 
-def convert_pth_to_csv(file_path):
-    print(f"Loading data from: {file_path}")
-    data = torch.load(file_path, map_location='cpu')
-    
-    # Handle tuple or dict format
-    loss_record = data[0] if isinstance(data, tuple) else data
-    
-    # Create DataFrame directly from zipped lists
-    train_data = loss_record['train']
-    dev_data = loss_record['dev']
-    min_len = min(len(train_data), len(dev_data))
-    
-    # Extract columns
-    epochs = [t[0] for t in train_data[:min_len]]
-    train_losses = [t[1] for t in train_data[:min_len]]
-    timestamps = [t[2] for t in train_data[:min_len]]
-    dev_losses = [d[1] for d in dev_data[:min_len]]
-    dev_top1s = [d[2] if len(d) > 2 else None for d in dev_data[:min_len]]
-    
-    df = pd.DataFrame({
-        'epoch': epochs,
-        'train_loss': train_losses,
-        'dev_loss': dev_losses,
-        'dev_top1': dev_top1s,
-        'timestamp': timestamps,
-        'early_stop_cnt': [0] * (min_len - 1) + [loss_record.get('early_stop_cnt', 0)]
-    })
 
-    # Save to CSV
-    csv_path = file_path.replace('.pth', '.csv')
-    df.to_csv(csv_path, index=False)
-    print(f"CSV file saved to: {csv_path}")
-    
-    # Print minimum dev loss
-    if 'dev_loss' in df.columns:
-        min_row = df.loc[df['dev_loss'].idxmin()]
-        print(f"Minimum Dev Loss: {min_row['dev_loss']:.6f} at epoch {int(min_row['epoch'])}")
-    
-    print("Head of DataFrame:")
-    print(df.head())
-    
-    return df
 
 
 def save_aspirin_feature(model,config_json, epoch):
