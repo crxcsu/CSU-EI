@@ -70,6 +70,8 @@ def main(main_path, seed=2023, config_file="config.json"):
     else:
         train_DDP(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
     
+    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"))
+    
     with open(os.path.join(main_path, 'configs', f"config_{time_stamp}.json"), 'w') as f:
         json.dump(config_json, f, indent=True)
 
@@ -205,8 +207,6 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         if early_stop_cnt > config['early_stop']:
             break
     print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
-
-    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{model_suffix}.json"))
 
 
 def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
