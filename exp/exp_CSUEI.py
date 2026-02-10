@@ -25,7 +25,7 @@ def main(main_path, seed=2023, config_file="config.json"):
 
     if config_json["training_config"]["experiment_dir"] is None:
         time_stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        folder_id = 'CSUEI_nist{}_smil{}_msl{}_bs{}_DDP{}_lr{:.1e}_smiesa{}_msesa{}_rm{}_{}'.format(
+        folder_id = 'CSUEI_nist{}_smil{}_msl{}_bs{}_DDP{}_lr{:.1e}_smiesa{}_msesa{}_rm{}_se{}_{}'.format(
                     config_json["dataset_config"]["nist"],  # nist 数据集编号
                     config_json["model_config"]["num_hidden_layers"],  # smile_layer 缩写为 smil
                     config_json["model_config"]["ms_layer"],  # ms_layer 缩写为 msl                    
@@ -35,6 +35,7 @@ def main(main_path, seed=2023, config_file="config.json"):
                     1 if config_json["model_config"]["smile_use_esa"] else 0,  # smile_use_esa 缩写为 smiesa
                     1 if config_json["model_config"]["ms_use_esa"] else 0,  # ms_use_esa 缩写为 msesa
                     1 if config_json["model_config"]["roberta_model_path"] else 0,  # roberta_model_path 缩写为 rm
+                    1 if config_json["model_config"]["ms_use_se"] else 0,  # ms_use_se 缩写为 se
                     time_stamp
                 )
         config_json["training_config"]["experiment_dir"] = os.path.join("results", folder_id)

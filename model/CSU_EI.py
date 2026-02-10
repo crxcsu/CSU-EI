@@ -24,6 +24,7 @@ class CSUEI(nn.Module):
                  ms_n_embed,
                  ms_n_heads,
                  ms_dropout,
+                 ms_use_se,
                  ms_use_esa,
                  ms_use_gradient_checkpoint,
                  ):
@@ -32,7 +33,7 @@ class CSUEI(nn.Module):
         self.Smiles_model = SmilesModel(roberta_model_path,vocab_size,max_position_embeddings,num_attention_heads,
                                         num_hidden_layers,type_vocab_size,smi_dropout,smile_use_esa,smiles_use_gradient_checkpoint,feature_dim)
 
-        self.MS_model = MSModel(ms_layer, ms_n_embed, ms_n_heads, ms_dropout, ms_use_esa, ms_use_gradient_checkpoint)
+        self.MS_model = MSModel(ms_layer, ms_n_embed, ms_n_heads, ms_dropout, ms_use_se, ms_use_esa, ms_use_gradient_checkpoint)
 
     def smiles_encoder(self, xis):
         smi_feature, smi_score = self.Smiles_model(xis)
@@ -313,13 +314,16 @@ class MSProjection(nn.Module):
         return self.dense(self.avgpool(x.transpose(1, 2)).squeeze(-1))
 
 class MSModel(nn.Module):
-    def __init__(self, n_layer, n_embed, n_heads, dropout, ms_use_esa, ms_use_gradient_checkpoint):
+    def __init__(self, n_layer, n_embed, n_heads, dropout, ms_use_se, ms_use_esa, ms_use_gradient_checkpoint):
         super().__init__()
+        self.ms_use_se = ms_use_se
         self.ms_use_esa = ms_use_esa
         # 训练时使用checkpoint
         self.use_gradient_checkpoint = ms_use_gradient_checkpoint
-        self.pos_emb = SinusoidalEmbedder(n_embed, dropout)  # 位置嵌入层, (块大小, 嵌入维度)
-        # self.pos_emb = MSEmbedder(1660, n_embed, dropout) 
+        if self.ms_use_se:
+            self.pos_emb = SinusoidalEmbedder(n_embed, dropout)  # 位置嵌入层, (块大小, 嵌入维度)
+        else:
+            self.pos_emb = MSEmbedder(1660, n_embed, dropout) 
         self.blocks = nn.ModuleList([Block(n_embed, n_heads, dropout) for _ in range(n_layer)])
         if self.ms_use_esa:
             self.esa = ESA_MS(n_embed, n_embed)
