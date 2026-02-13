@@ -207,7 +207,13 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         print('epoch = {:4d}, dev_loss = {:.4f}'.format(epoch, dev_loss), 'dev_top1_accuracy = {:.4f}'.format(dev_top1))
         if early_stop_cnt > config['early_stop']:
             break
+    
     print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
+    
+    # 删除临时模型文件
+    if os.path.exists(model_temp_path):
+        os.remove(model_temp_path)
+        print(f"Removed temporary model file: {model_temp_path}")
 
 
 def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
@@ -242,7 +248,6 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0}
        ]
     optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])  # AdamW优化器,weight_decay是正则化项
-
 
     n_epochs = config['n_epochs']
     model_path = LOG_DIR + config['model_save_path'] + model_suffix + '.pth'
@@ -374,6 +379,11 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         
     if rank==0:
         print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
+
+        # 删除临时模型文件
+        if os.path.exists(model_temp_path):
+            os.remove(model_temp_path)
+            print(f"Removed temporary model file: {model_temp_path}")
 
 
 def dev(dv_set, model, device):
