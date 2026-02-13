@@ -169,6 +169,45 @@ class NIST23Dataset(Dataset):
         return len(self.data)
 
 
+def load_analysis_data(analysis_data, config_json):
+    """
+    Args:
+        analysis_data (tuple): A tuple containing (SMILES, EIMS).
+            - SMILES (list): A list of SMILES strings. e.g. ['C', 'CC', ...]
+            - EIMS (list): A list of peaks data. Each item can be a list of peaks [[mz, inten], ...] or a string representation of it.
+        tokenizer: RobertaTokenizer object for tokenizing SMILES.
+        config_json (dict): Configuration dictionary containing 'device' and 'dataset_config'.
+    """
+    SMILES, EIMS = analysis_data
+    # Preprocess SMILES
+    smiles_ids_list = []
+    smiles_mask_list = []
+    tokenizer = build_tokenizer(config_json['roberta_tokenizer_path'])
+    for smiles in SMILES:
+        smiles_ids, smiles_mask = pre_processing_smi(smiles, tokenizer, config_json)
+        smiles_ids_list.append(smiles_ids)
+        smiles_mask_list.append(smiles_mask)
+
+    smiles_ids = torch.cat(smiles_ids_list, dim=0).to(config_json["device"])
+    smiles_mask = torch.cat(smiles_mask_list, dim=0).to(config_json["device"])
+
+    # Preprocess MS
+    mz_list = []
+    intensity_list = []
+    ms_mask_list = []
+    for eims in EIMS:
+        mz, intensity, ms_mask = pre_processing_ms(eims, config_json)
+        mz_list.append(mz)
+        intensity_list.append(intensity)
+        ms_mask_list.append(ms_mask)
+
+    mz = torch.cat(mz_list, dim=0).to(config_json["device"])
+    intensity = torch.cat(intensity_list, dim=0).to(config_json["device"])
+    ms_mask = torch.cat(ms_mask_list, dim=0).to(config_json["device"])
+    
+    return smiles_ids, smiles_mask, mz, intensity, ms_mask
+
+
 # def pre_processing_smi(smiles_str, tokenizer, config_json):
 #     smiles_str = Chem.MolToSmiles(Chem.MolFromSmiles(smiles_str))
 #     encode_dict = tokenizer.encode_plus(
@@ -283,7 +322,10 @@ def process_ms_spectra_for_wcs(ms, M_max = 1000):
     return ms_tensor
 
 
-def get_tokenined_smiles(SMILES, tokenizer, config_json):
+def get_tokenined_smiles(SMILES, config_path):
+    with open(config_path, 'r') as f:
+        config_json = json.loads(f.read())
+    tokenizer=build_tokenizer(config_json['roberta_tokenizer_path'])
     smiles_data = pre_processing_smi(SMILES, tokenizer, config_json)[0].squeeze(0)
     smiles_token = []
     for i in smiles_data:
