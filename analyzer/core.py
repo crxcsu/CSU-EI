@@ -9,34 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from data_provider.dataset import *
 from model.CSU_EI import CSUEI
-from utils.tools import set_seed
-
-
-# 对向量进行可视化
-# from sklearn.manifold import TSNE
-# import numpy as np
-# import matplotlib.pyplot as plt
-
-# tsne = TSNE(n_components=2, init='pca', random_state=0)
-# smi_feature = smi_feature.cpu().numpy()
-# ms_feature = ms_feature.cpu().numpy()
-# feature = np.concatenate((smi_feature, ms_feature), axis=0)
-# feature = tsne.fit_transform(feature)
-# smi_feature = feature[:smi_feature.shape[0]]
-# ms_feature = feature[smi_feature.shape[0]:]
-# plt.figure()
-# plt.scatter(smi_feature[:, 0], smi_feature[:, 1], c='r', label='smi')
-# plt.scatter(ms_feature[:, 0], ms_feature[:, 1], c='b', label='ms')
-# plt.legend()
-# plt.savefig('data/feature/aspirin_feature/aspirin_feature_epoch{}.png'.format(epoch))
-
-
-# def get_cos_distance(input_1, input_2):
-#     # 归一化
-#     input_1 = input_1 / input_1.norm(dim=-1, keepdim=True)
-#     input_2 = input_2 / input_2.norm(dim=-1, keepdim=True)
-#     with torch.no_grad():
-#         return input_1 @ input_2.t()
+import ast
 
 # =============================================================================
 # Section 1: Top-K Calculation Core Functions
@@ -45,8 +18,9 @@ from utils.tools import set_seed
 
 #  --------------------Calculate Dot Product Matrix----------------
 def get_cos_distance(input_1, input_2):
-    with torch.no_grad():
-        return input_1 @ input_2.t()
+    input_1 = input_1 / input_1.norm(dim=-1, keepdim=True)
+    input_2 = input_2 / input_2.norm(dim=-1, keepdim=True)
+    return input_1 @ input_2.t()
 # -------------------------------------按batch计算topk---------------------------------
 def get_topk(score, ms_index, k: list):
     """
@@ -90,17 +64,14 @@ def calculate_all_topk(config_path,
     exp_dir = config_json["training_config"]["experiment_dir"]
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+
     config_json["model_config"]["roberta_model_path"] = None
     model = CSUEI(**config_json["model_config"])
-    model_dict = torch.load(model_path, map_location=device)
     # Handle DDP 'module.' prefix if present
     new_state_dict = {}
-    for k, v in model_dict.items():
-        if k.startswith('module.'):
-            new_state_dict[k[7:]] = v
-        else:
-            new_state_dict[k] = v
-    model.load_state_dict(new_state_dict, strict=False)
+    state_dict = torch.load(model_path, map_location=device)
+    new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
+    model.load_state_dict(new_state_dict, strict=True)
     model = model.to(device)
     model.eval()
 
@@ -115,9 +86,8 @@ def calculate_all_topk(config_path,
                 smi[0] = smi[0].to(device)
                 smi[1] = smi[1].to(device)
                 with torch.no_grad():
-                    zis, _ = model.smiles_encoder(smi)
-                smiles_feature_tmp = zis / zis.norm(dim=-1, keepdim=True)  # 除以模长，归一化
-                smiles_list.append(smiles_feature_tmp)
+                    smi_feature, _ = model.smiles_encoder(smi)
+                smiles_list.append(smi_feature)
         smiles_feature = torch.cat(smiles_list, dim=0)
         torch.save(smiles_feature, feature_path)
     else:
@@ -148,9 +118,8 @@ def calculate_all_topk(config_path,
     for _, ms in tqdm(test_dataloader):
         ms[0], ms[1], ms[2] = ms[0].to(device), ms[1].to(device), ms[2].to(device)
         with torch.no_grad():
-            zls,_ = model.ms_encoder(ms)
-        ms_feature_tmp = zls / zls.norm(dim=-1, keepdim=True)  # 除以模长，归一化
-        score = get_cos_distance(ms_feature_tmp, smiles_feature) # (B, 262157)
+            ms_feature, _ = model.ms_encoder(ms)
+        score = get_cos_distance(ms_feature, smiles_feature) # (B, 262157)
         B, D = score.shape
         test_index = torch.tensor(full_test_index_list[current_idx:current_idx+B]).to(device)
         
@@ -180,17 +149,10 @@ def calculate_all_topk(config_path,
         top_k += topk_np
         current_idx += B
 
-    # test_pd = pd.read_csv('data/all_data/test23/test_smiles_rank23.csv')
-    # test_pd['rank23'] = rank23
-    # test_pd.to_csv('data/all_data/test23/test_smiles_rank23.csv', index=False)
     print(top_k)
 
 def auto_eval_topk(config_path,
                    MAIN_PATH=os.getcwd(),
-                   test_index_list_path='data/nist23_data/test23/test_index_list.json', 
-                   mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json', 
-                   formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json', 
-                   test_formula_list_path='data/nist23_data/test23/test_formula_list.json',
                    top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]):
     """
     Automated evaluation of Top-K accuracy across three filtering modes:
@@ -209,7 +171,7 @@ def auto_eval_topk(config_path,
         test_formula_list_path (str): Path to the JSON file containing formulas for the test set molecules.
         top_k_list (list): List of 'k' values to calculate top-k accuracy for.
     """
-    
+
     # -------------------- 1. Setup & Model Loading --------------------
     with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
         config_json = json.loads(f.read())
@@ -217,16 +179,30 @@ def auto_eval_topk(config_path,
     device = config_json['device']
     exp_dir = config_json["training_config"]["experiment_dir"]
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
-    
+
+    if config_json["dataset_config"]["nist"] == 23:
+        test_index_list_path='data/nist23_data/test23/test_index_list.json', 
+        mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json', 
+        formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json', 
+        test_formula_list_path='data/nist23_data/test23/test_formula_list.json'
+    elif config_json["dataset_config"]["nist"] == 17:
+        test_index_list_path='data/nist17_data/test_nist17/test_index_list.json', 
+        mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json', 
+        formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json', 
+        test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
+
     # Initialize and load model
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+
     config_json["model_config"]["roberta_model_path"] = None
+    if "ms_use_se" not in config_json["model_config"]:
+        config_json["model_config"]["ms_use_se"] = True
+
     model = CSUEI(**config_json["model_config"])
-    
     # Load state dict handling DDP wrapper
     state_dict = torch.load(model_path, map_location=device)
     new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-    model.load_state_dict(new_state_dict, strict=False)
+    model.load_state_dict(new_state_dict, strict=True)
     model.to(device).eval()
 
     # -------------------- 2. Precompute/Load Library Features --------------------
@@ -247,8 +223,8 @@ def auto_eval_topk(config_path,
         for smi, _ in tqdm(mainlib_loader, desc="Encoding Library SMILES"):
             smi = [x.to(device) for x in smi]
             with torch.no_grad():
-                zis, _ = model.smiles_encoder(smi)
-            smiles_features_list.append(zis / zis.norm(dim=-1, keepdim=True))
+                smi_feature, _ = model.smiles_encoder(smi)
+            smiles_features_list.append(smi_feature)
             
         smiles_feature = torch.cat(smiles_features_list, dim=0)
         torch.save(smiles_feature, feature_path)
@@ -289,11 +265,10 @@ def auto_eval_topk(config_path,
         
         # Get MS embeddings
         with torch.no_grad():
-            zls, _ = model.ms_encoder(ms)
-        ms_feature_tmp = zls / zls.norm(dim=-1, keepdim=True)
+            ms_feature, _ = model.ms_encoder(ms)
         
         # Calculate Base Similarity Score (Cosine)
-        base_score = get_cos_distance(ms_feature_tmp, smiles_feature)
+        base_score = get_cos_distance(ms_feature, smiles_feature)
         B, D = base_score.shape
         
         # Get ground truth indices for this batch
@@ -347,27 +322,124 @@ def auto_eval_topk(config_path,
     print(f"Results saved to {output_path}")
 
 
+def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o mass filter'):
+    exp_dir = os.path.dirname(config_path)
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
+    topk_path = os.path.join(exp_dir, "plot_result_analyzer", f"topk_evaluation_3modes_{time_stamp}.csv")
+    df = pd.read_csv(topk_path, index_col=0)
+    values = df.loc[label, k_list].values * 100
+    return list(values), df
+
+
+def get_data_and_features(config_path, data, batch_size=1, MAIN_PATH=os.getcwd()):
+    """
+    Load trained model to extract features and compute similarity between SMILES and Mass Spectra.
+
+    Args:
+        config_path (str): Path to experiment config file.
+        data (tuple): (SMILES_list, EIMS_list).
+        batch_size (int): Batch size for inference.
+        MAIN_PATH (str): Project root directory.
+
+    Returns:
+        tuple: (normalized_smiles_features, normalized_ms_features, similarity_matrix), (smiles_ids, smiles_mask, mz, intensity, ms_mask)
+    """
+    with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
+            config_json = json.loads(f.read())
+    exp_dir = config_json["training_config"]["experiment_dir"]
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
+
+    smiles_ids, smiles_mask, mz, intensity, ms_mask = load_analysis_data(data, config_json)
+
+    model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+    model_dict = torch.load(model_path, map_location=config_json["device"])
+
+    config_json["model_config"]["roberta_model_path"] = None
+    if "ms_use_se" not in config_json["model_config"]:
+        config_json["model_config"]["ms_use_se"] = True
+        
+    model = CSUEI(**config_json["model_config"])
+    model.load_state_dict(model_dict)
+    model.to(config_json["device"])
+    model.eval()
+
+    test_smiles_feature = []
+    test_ms_feature = []
+    with torch.no_grad():
+        for i in range(0, len(smiles_ids), batch_size):
+            smiles_feature, smiles_score = model.smiles_encoder([smiles_ids[i:i+batch_size], smiles_mask[i:i+batch_size]])
+            test_smiles_feature.append(smiles_feature)
+        for i in range(0, len(mz), batch_size):
+            ms_feature, ms_score = model.ms_encoder([mz[i:i+batch_size], intensity[i:i+batch_size], ms_mask[i:i+batch_size]])
+            test_ms_feature.append(ms_feature)
+    test_smiles_feature = torch.cat(test_smiles_feature, dim=0)
+    test_ms_feature = torch.cat(test_ms_feature, dim=0)
+
+    test_smiles_feature /= torch.norm(test_smiles_feature, dim=-1, keepdim=True)
+    test_ms_feature /= torch.norm(test_ms_feature, dim=-1, keepdim=True)
+    similarity = test_smiles_feature.cpu().numpy() @ test_ms_feature.cpu().numpy().T
+
+    if len(smiles_ids)==1 and len(mz)==1:
+        return (smiles_ids, smiles_mask, mz, intensity, ms_mask),(test_smiles_feature, test_ms_feature, similarity, smiles_score, ms_score)
+    else:
+        return (smiles_ids, smiles_mask, mz, intensity, ms_mask),(test_smiles_feature, test_ms_feature, similarity, None, None)
+
+
 # =============================================================================
 # Section 2: Visualization and Analysis Utilities
 # Originally from: plot_eims.py
 # =============================================================================
-def plot_ms_spectrum(peaks_data):
-    if isinstance(peaks_data, str):
-        peaks_data = ast.literal_eval(peaks_data)
-    peaks = np.array(peaks_data, dtype=np.float32)
-    mz = peaks[:, 0]
-    mz_max = mz.max()
-    intensity = peaks[:, 1]
-    intensity = intensity / intensity.max()
-    plt.figure(figsize=(10, 5))
-    plt.bar(mz, intensity, width=mz_max/500, color='red')
-    plt.xlabel("m/z")
-    plt.ylabel("intensity")
-    plt.show()
+def plot_ms_spectrum(EIMS, save_dir=None, titles=None):
+    i = 0
+    for peaks_data in EIMS:
+        if isinstance(peaks_data, str):
+            peaks_data = ast.literal_eval(peaks_data)
+        peaks = np.array(peaks_data, dtype=np.float32)
+        mz = peaks[:, 0]
+        mz_max = mz.max()
+        intensity = peaks[:, 1]
+        intensity = intensity / intensity.max()
+        plt.figure(figsize=(10, 5))
+        plt.bar(mz, intensity, width=mz_max/500, color='red')
+        plt.xlabel("m/z")
+        plt.ylabel("intensity")
+        
+        if titles is not None and i < len(titles):
+            plt.title(titles[i])
+        else:
+            plt.title(f"Mass Spectrum {i+1}")
+            
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f"EIMS_{i+1}.png"), bbox_inches='tight')
+        i += 1
+        plt.show()
+
+
+def plot_mol_structure(smiles_list, save_dir=None):
+    from rdkit import Chem
+    from rdkit.Chem import Draw
+    from rdkit.Chem import AllChem
+
+    mol_list = [Chem.MolFromSmiles(smiles) for smiles in smiles_list]
+    for i in range(len(mol_list)):
+        mol = mol_list[i]
+        if mol is None: 
+            print(f"Warning: Invalid SMILES at index {i}")
+            continue
+        AllChem.Compute2DCoords(mol)
+        img = Draw.MolToImage(mol, size=(300, 300))
+        plt.figure(figsize=(3, 3))
+        plt.imshow(img)
+        plt.axis('off')
+        plt.title(f'SMILES {i+1}', fontsize=12)
+        if save_dir is not None:
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, f"SMILES_{i+1}.png"), bbox_inches='tight')
+        plt.show()
 
 
 def plot_loss_curve(loss_record_csv_path, fig_save_path):
-    # 绘制训练过程的loss和dev-top1曲线
     df = pd.read_csv(loss_record_csv_path)
     epoch_list = df['epoch'].tolist()
     train_loss_list = df['train_loss'].tolist()
@@ -375,7 +447,6 @@ def plot_loss_curve(loss_record_csv_path, fig_save_path):
     dev_top1_list = df['dev_top1'].tolist()
     
     fig, ax1 = plt.subplots()
-    # 绘制dev_loss曲线
     ax1.set_xlabel('epoch')
     ax1.set_ylabel('loss')
     line1, = ax1.plot(epoch_list, dev_loss_list, color='blue', linewidth=1, label='dev_loss')
@@ -391,11 +462,8 @@ def plot_loss_curve(loss_record_csv_path, fig_save_path):
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='right')
     fig.tight_layout()
-    # 保存高清图片
     plt.savefig(fig_save_path, dpi=300)
     # plt.close()
-
-
 
 
 def save_aspirin_feature(model,config_json, epoch):
@@ -429,4 +497,66 @@ def save_aspirin_feature(model,config_json, epoch):
     torch.save([smi_feature, ms_feature], 'data/feature/aspirin_feature/aspirin_feature_epoch{}.pth'.format(epoch))
 
 
+def find_functional_group_pairs(json_path, smarts_transform, max_pairs=2):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    """
+    Search for molecular pairs where one can be transformed into the other via the given reaction.
+    This simulates finding pairs that differ by a specifc functional group.
+    
+    Args:
+        json_path: Path to the dataset JSON.
+        smarts_transform: SMARTS string defining the transformation (e.g., Remove OH).
+        max_pairs: Stop after finding this many pairs.
+    """
+    with open(json_path, 'r') as f:
+        data = json.load(f)
 
+    # 1. Build Index: Canonical SMILES -> Data Entry (using walrus operator for conciseness)
+    smi_to_data = {}
+    for d in tqdm(data, desc="Indexing"):
+        if (s := d.get('smiles')) and (m := Chem.MolFromSmiles(s)):
+            smi_to_data[Chem.MolToSmiles(m, isomericSmiles=True)] = d
+
+    rxn = AllChem.ReactionFromSmarts(smarts_transform)
+    found_pairs = []
+
+    # 2. Iterate and Transform
+    for src_smi, src_data in tqdm(smi_to_data.items(), desc="Searching"):
+        mol = Chem.MolFromSmiles(src_smi)
+        # Run reaction, get all products
+        for products in rxn.RunReactants((mol,)):
+            for prod_mol in products:
+                try:
+                    Chem.SanitizeMol(prod_mol)
+                    target_smi = Chem.MolToSmiles(prod_mol, isomericSmiles=True)
+                except ValueError: continue
+
+                # Match found: Product exists in our dataset
+                if target_smi in smi_to_data and target_smi != src_smi:
+                    found_pairs.append({
+                        'with_group': src_data,
+                        'without_group': smi_to_data[target_smi]
+                    })
+                    # Avoid duplicates from symmetric reaction sites by checking last added
+                    if len(found_pairs) >= max_pairs: return found_pairs
+    return found_pairs
+
+
+# 对向量进行可视化
+# from sklearn.manifold import TSNE
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# tsne = TSNE(n_components=2, init='pca', random_state=0)
+# smi_feature = smi_feature.cpu().numpy()
+# ms_feature = ms_feature.cpu().numpy()
+# feature = np.concatenate((smi_feature, ms_feature), axis=0)
+# feature = tsne.fit_transform(feature)
+# smi_feature = feature[:smi_feature.shape[0]]
+# ms_feature = feature[smi_feature.shape[0]:]
+# plt.figure()
+# plt.scatter(smi_feature[:, 0], smi_feature[:, 1], c='r', label='smi')
+# plt.scatter(ms_feature[:, 0], ms_feature[:, 1], c='b', label='ms')
+# plt.legend()
+# plt.savefig('data/feature/aspirin_feature/aspirin_feature_epoch{}.png'.format(epoch))
