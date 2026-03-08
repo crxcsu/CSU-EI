@@ -172,13 +172,17 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         # After each epoch, test your model on the validation (development) set.
         dev_loss, dev_top1 = dev(dv_set, model, device)
 
+        if  epoch <= 5:
+            torch.save(model.state_dict(), LOG_DIR + config['model_save_path'] + f"epoch{epoch}_" + model_suffix + '.pth')
+            print(f'Saving model for early epoch (epoch = {epoch:4d})')
+
         if dev_top1 > max_dev_top1:
             # Save model if your model improved
             dev_min_loss = dev_loss
             max_dev_top1 = dev_top1
             torch.save(model.state_dict(), model_path)
             early_stop_cnt = 0
-            print('Saving model (epoch = {:4d}, loss = {:.4f})'.format(epoch, dev_min_loss))
+            print('Saving best model (epoch = {:4d}, loss = {:.4f})'.format(epoch, dev_min_loss))
         else:
             early_stop_cnt += 1
         
@@ -240,7 +244,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
                                 drop_last=tr_set.drop_last)
     model = model.to(device)
     model = DDP(model, device_ids=[local_rank], output_device=local_rank)
-    loss = NTXentLoss(device, temperature=config['temperature'], alpha_weight=config['alpha_weight'])
+    loss = NTXentLoss(device, temperature=config['temperature'], alpha_weight=config['alpha_weight'], use_distributed=config['use_distributed'])
     param_optimizer = list(filter(lambda p: p[1].requires_grad, model.named_parameters()))
     no_decay = ["bias", "LayerNorm.bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = [
