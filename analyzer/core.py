@@ -333,7 +333,7 @@ def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o mass filter'):
     return list(values), df
 
 
-def get_data_and_features(config_path, data, batch_size=1, MAIN_PATH=os.getcwd()):
+def get_data_and_features(config_path, data, batch_size=1, epoch=None, MAIN_PATH=os.getcwd()):
     """
     Load trained model to extract features and compute similarity between SMILES and Mass Spectra.
 
@@ -341,6 +341,7 @@ def get_data_and_features(config_path, data, batch_size=1, MAIN_PATH=os.getcwd()
         config_path (str): Path to experiment config file.
         data (tuple): (SMILES_list, EIMS_list).
         batch_size (int): Batch size for inference.
+        ms_maxpeaks (int, optional): Maximum number of peaks for MS data.
         MAIN_PATH (str): Project root directory.
 
     Returns:
@@ -353,7 +354,10 @@ def get_data_and_features(config_path, data, batch_size=1, MAIN_PATH=os.getcwd()
 
     smiles_ids, smiles_mask, mz, intensity, ms_mask = load_analysis_data(data, config_json)
 
-    model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+    if epoch is not None:
+        model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_epoch{epoch}_{time_stamp}.pth')
+    else:    
+        model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
     model_dict = torch.load(model_path, map_location=config_json["device"])
 
     config_json["model_config"]["roberta_model_path"] = None
@@ -498,7 +502,9 @@ def save_aspirin_feature(model,config_json, epoch):
             
     torch.save([smi_feature, ms_feature], 'data/feature/aspirin_feature/aspirin_feature_epoch{}.pth'.format(epoch))
 
-
+# =============================================================================
+# Section 3: Visualization and Analysis Utilities
+# =============================================================================
 def find_functional_group_pairs(json_path, smarts_transform, max_pairs=2):
     from rdkit import Chem
     from rdkit.Chem import AllChem
@@ -544,6 +550,129 @@ def find_functional_group_pairs(json_path, smarts_transform, max_pairs=2):
                     if len(found_pairs) >= max_pairs: return found_pairs
     return found_pairs
 
+def find_and_visualize_pairs(json_path, smarts_transform, max_pairs=5):
+    from rdkit import Chem
+    from rdkit.Chem import AllChem, Draw
+    from IPython.display import display
+
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+
+    # 1. Build Index and Pre-filter
+    # Indexing: Map Canonical SMILES to Data Entry
+    smi_to_data = {}
+    print("Indexing dataset...")
+    for d in tqdm(data, desc="Indexing"):
+        if (s := d.get('smiles')) and (m := Chem.MolFromSmiles(s)):
+            try:
+                smi_to_data[Chem.MolToSmiles(m, isomericSmiles=True)] = d
+            except: continue
+    
+    # Create simplified pattern for filtering (remove map numbers for safer matching)
+    # This prevents issues where map numbers in reaction SMARTS cause strict matching failures
+    reactant_smarts = smarts_transform.split(">>")[0]
+    # Remove map numbers (e.g., :1) for the substructure filter
+    import re
+    clean_pattern_smart = re.sub(r':\d+]', ']', reactant_smarts)
+    reactant_pattern = Chem.MolFromSmarts(clean_pattern_smart)
+    
+    rxn = AllChem.ReactionFromSmarts(smarts_transform)
+    found_count = 0
+
+    print(f"Searching for pairs using transformation: {smarts_transform}")
+    print(f"Filter pattern (stripped maps): {clean_pattern_smart}")
+
+    # First pass: Identify all source candidates
+    source_candidates = []
+    print("Step 1: identifying candidate molecules containing the functional group...")
+    for smi, d in tqdm(smi_to_data.items(), desc="Filtering Candidates"):
+        mol = Chem.MolFromSmiles(smi)
+        if reactant_pattern and mol.HasSubstructMatch(reactant_pattern):
+            source_candidates.append((smi, d, mol))
+    
+    print(f"Found {len(source_candidates)} potential source molecules.")
+    
+    # 2. Iterate through candidates to find pairs
+    print("Step 2: Generating products and searching for matches...")
+    for src_smi, src_data, src_mol in tqdm(source_candidates, desc="Finding Pairs"):
+        # Run reaction
+        products_list = rxn.RunReactants((src_mol,))
+        
+        prod_smiles_set = set()
+        for products in products_list:
+            for prod_mol in products:
+                try:
+                    Chem.SanitizeMol(prod_mol)
+                    prod_mol = Chem.RemoveHs(prod_mol) # Ensure canonical form matches database
+                    prod_smi = Chem.MolToSmiles(prod_mol, isomericSmiles=True)
+                    prod_smiles_set.add(prod_smi)
+                except: continue
+        
+        # Check against dataset
+        for target_smi in prod_smiles_set:
+            if target_smi in smi_to_data and target_smi != src_smi:
+                target_data = smi_to_data[target_smi]
+                
+                print(f"\n[MATCH FOUND] Pair {found_count + 1}")
+                print(f"Source (ID {src_data.get('nist', 'N/A')}): {src_smi}")
+                print(f"Target (ID {target_data.get('nist', 'N/A')}): {target_smi}")
+                
+                # Visualization (search_pair logic)
+                img = Draw.MolsToGridImage(
+                    [src_mol, Chem.MolFromSmiles(target_smi)], 
+                    molsPerRow=2,
+                    legends=[f"Source: {src_data.get('nist', 'N/A')}", f"Target: {target_data.get('nist', 'N/A')}"],
+                    subImgSize=(300, 300)
+                )
+                display(img)
+                
+                found_count += 1
+                if found_count >= max_pairs:
+                    print(f"Reached max_pairs limit ({max_pairs}). Stopping.")
+                    return
+
+def search_pair(query_id, transform_smart, smi_map, id_map):
+    from rdkit.Chem import AllChem, Draw
+    from IPython.display import display
+    q_data = id_map.get(str(query_id))
+    if not q_data: return print(f"Query ID {query_id} not found.")
+    
+    q_mol = Chem.MolFromSmiles(q_data['smiles'])
+    print(f"Query: ID {query_id} | SMILES: {q_data['smiles']}")
+
+    try:
+        rxn = AllChem.ReactionFromSmarts(transform_smart)
+        products = rxn.RunReactants((q_mol,))
+        
+        found = False
+        prod_smiles_set = set()
+        
+        for prod_group in products:
+            for prod in prod_group:
+                try:
+                    Chem.SanitizeMol(prod)
+                    prod_smi = Chem.MolToSmiles(prod, isomericSmiles=True)
+                    prod_smiles_set.add(prod_smi)
+                except: continue
+
+        for prod_smi in prod_smiles_set:
+            if target := smi_map.get(prod_smi):
+                found = True
+                print(f"\n[MATCH] Found Target ID: {target.get('nist')} | SMILES: {prod_smi}")
+                # Set molsPerRow to match the number of molecules (2) to avoid empty whitespace
+                img = Draw.MolsToGridImage([q_mol, Chem.MolFromSmiles(prod_smi)], 
+                                         molsPerRow=2,
+                                         legends=[f"query_ID: {query_id}", f"target_ID: {target.get('nist')}"],
+                                         subImgSize=(300, 300))
+                display(img)
+                
+        if not found: 
+            print("No matching target found.")
+            if prod_smiles_set:
+                print(f"Generated SMILES: {list(prod_smiles_set)[:3]}")
+
+    except Exception as e:
+        print(f"Error: {e}")
 
 # 对向量进行可视化
 # from sklearn.manifold import TSNE
