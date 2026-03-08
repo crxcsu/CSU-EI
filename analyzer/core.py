@@ -328,7 +328,7 @@ def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o mass filter'):
     return list(values), df
 
 
-def get_data_and_features(config_path, data, batch_size=1, ms_maxpeaks=None, MAIN_PATH=os.getcwd()):
+def get_data_and_features(config_path, data, batch_size=1, epoch=None, MAIN_PATH=os.getcwd()):
     """
     Load trained model to extract features and compute similarity between SMILES and Mass Spectra.
 
@@ -346,12 +346,13 @@ def get_data_and_features(config_path, data, batch_size=1, ms_maxpeaks=None, MAI
             config_json = json.loads(f.read())
     exp_dir = config_json["training_config"]["experiment_dir"]
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
-    if ms_maxpeaks is not None:
-        config_json["dataset_config"]["ms_maxpeaks"] = ms_maxpeaks
 
     smiles_ids, smiles_mask, mz, intensity, ms_mask = load_analysis_data(data, config_json)
 
-    model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
+    if epoch is not None:
+        model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_epoch{epoch}_{time_stamp}.pth')
+    else:    
+        model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
     model_dict = torch.load(model_path, map_location=config_json["device"])
 
     config_json["model_config"]["roberta_model_path"] = None
