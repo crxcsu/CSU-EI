@@ -66,6 +66,9 @@ def calculate_all_topk(config_path,
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
 
     config_json["model_config"]["roberta_model_path"] = None
+    if "ms_use_se" not in config_json["model_config"]:
+        config_json["model_config"]["ms_use_se"] = True
+
     model = CSUEI(**config_json["model_config"])
     # Handle DDP 'module.' prefix if present
     new_state_dict = {}
@@ -76,7 +79,7 @@ def calculate_all_topk(config_path,
     model.eval()
 
     # 2 计算mainlib all uni feature
-    feature_path =  os.path.join(MAIN_PATH, exp_dir, f'mainlib_all_uni_feature/mainlib23_smiles_feature_{time_stamp}.pth')
+    feature_path =  os.path.join(MAIN_PATH, exp_dir, f'mainlib_all_uni_feature/mainlib{config_json["dataset_config"]["nist"]}_smiles_feature_{time_stamp}.pth')
     os.makedirs(os.path.dirname(feature_path), exist_ok=True)
     if not os.path.exists(feature_path):
         mainlib_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
@@ -181,19 +184,16 @@ def auto_eval_topk(config_path,
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
 
     if config_json["dataset_config"]["nist"] == 23:
-        test_index_list_path='data/nist23_data/test23/test_index_list.json'
-        mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json'
+        test_index_list_path='data/nist23_data/test23/test_index_list.json'   
+        mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json'     
         formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json'
         test_formula_list_path='data/nist23_data/test23/test_formula_list.json'
-        lib_prefix = 'mainlib23'
     elif config_json["dataset_config"]["nist"] == 17:
         test_index_list_path='data/nist17_data/test_nist17/test_index_list.json'
-        mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json'
+        mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json'  
         formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json'
         test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
-        lib_prefix = 'mainlib17'
-
-    # Initialize and load model
+        
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
 
     config_json["model_config"]["roberta_model_path"] = None
@@ -209,7 +209,7 @@ def auto_eval_topk(config_path,
 
     # -------------------- 2. Precompute/Load Library Features --------------------
     feature_dir = os.path.join(MAIN_PATH, exp_dir, 'mainlib_all_uni_feature')
-    feature_path = os.path.join(feature_dir, f'{lib_prefix}_smiles_feature_{time_stamp}.pth')
+    feature_path = os.path.join(feature_dir, f'mainlib{config_json["dataset_config"]["nist"]}_smiles_feature_{time_stamp}.pth')
     
     if os.path.exists(feature_path):
         print("Feature file detected. Loading pre-computed features...")
