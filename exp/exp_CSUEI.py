@@ -221,7 +221,6 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
 
 def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
-
     config = config_json['training_config']
     dist.init_process_group(backend='nccl') # 【集合通讯】其他进程连master，大家互认
     rank=dist.get_rank()
@@ -432,65 +431,6 @@ def dev(dv_set, model, device):
     total_loss = total_loss / len(dv_set)
     top1_accuracy = num_correct / i
     return total_loss, top1_accuracy
-
-
-def dev_DDP(dv_set, model, device, local_rank):
-    model.eval()
-    
-    loss_fn = NTXentLoss(device, temperature=0.1, alpha_weight=0.5)
-    
-    iterator = tqdm(dv_set) if local_rank == 0 else dv_set
-    
-    smi_list = []
-    ms_list = []
-    total_loss = 0
-    
-    with torch.no_grad():
-        for smi, ms in iterator:
-            ms[0], ms[1], ms[2] = ms[0].to(device), ms[1].to(device), ms[2].to(device)
-            smi[0] = smi[0].to(device)
-            smi[1] = smi[1].to(device)
-            
-            smi_feature, smi_score, ms_feature, ms_score = model(smi, ms)
-            temp_loss = loss_fn(smi_feature, ms_feature)
-            total_loss += temp_loss.item() * smi_feature.shape[0]
-            
-            smi_feature = smi_feature / smi_feature.norm(dim=-1, keepdim=True)
-            ms_feature = ms_feature / ms_feature.norm(dim=-1, keepdim=True)
-            
-            smi_list.append(smi_feature)
-            ms_list.append(ms_feature)
-            
-    local_smi_features = torch.cat(smi_list, dim=0)
-    local_ms_features = torch.cat(ms_list, dim=0)
-    local_count = local_smi_features.shape[0]
-    
-    world_size = dist.get_world_size()
-    
-    gathered_smi = [torch.zeros_like(local_smi_features) for _ in range(world_size)]
-    gathered_ms = [torch.zeros_like(local_ms_features) for _ in range(world_size)]
-    
-    dist.all_gather(gathered_smi, local_smi_features)
-    dist.all_gather(gathered_ms, local_ms_features)
-    
-    all_smi_features = torch.cat(gathered_smi, dim=0)
-    all_ms_features = torch.cat(gathered_ms, dim=0)
-    
-    total_samples_tensor = torch.tensor([local_count], device=device)
-    dist.all_reduce(total_samples_tensor, op=dist.ReduceOp.SUM)
-    global_total_samples = total_samples_tensor.item()
-    
-    loss_tensor = torch.tensor([total_loss], device=device)
-    dist.all_reduce(loss_tensor, op=dist.ReduceOp.SUM)
-    global_avg_loss = loss_tensor.item() / global_total_samples
-    
-    cos_distance = all_ms_features @ all_smi_features.T
-    label = torch.arange(0, all_ms_features.shape[0]).to(device)
-    pred = torch.argmax(cos_distance, dim=1)
-    num_correct = (pred == label).sum().item()
-    top1_accuracy = num_correct / all_ms_features.shape[0]
-    
-    return global_avg_loss, top1_accuracy
 
 
 
