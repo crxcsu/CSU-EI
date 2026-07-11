@@ -184,7 +184,7 @@ def load_analysis_data(analysis_data, config_json):
     smiles_mask_list = []
     tokenizer = build_tokenizer(config_json['roberta_tokenizer_path'])
     for smiles in SMILES:
-        smiles_ids, smiles_mask = pre_processing_smi(smiles, tokenizer, config_json)
+        smiles_ids, smiles_mask = pre_processing_smi_with_canonical(smiles, tokenizer, config_json)
         smiles_ids_list.append(smiles_ids)
         smiles_mask_list.append(smiles_mask)
 
@@ -249,6 +249,38 @@ def pre_processing_smi(smiles_str, tokenizer, config_json):
                 torch.tensor(encode_dict['attention_mask']))
         smiles_ids = torch.stack(smiles_ids)
         smiles_mask = torch.stack(smiles_mask)
+    return [smiles_ids, smiles_mask]
+
+def pre_processing_smi_with_canonical(smiles_str, tokenizer, config_json):
+    if isinstance(smiles_str, str):  # 判断smiles_str是否为字符串类型
+        # 使用rdkit将smiles字符串转换为标准格式
+        smiles_str = Chem.MolToSmiles(Chem.MolFromSmiles(smiles_str))
+        encode_dict = tokenizer.encode_plus(
+            text=smiles_str,  # 输入的smiles字符串
+            max_length=config_json["dataset_config"]["smiles_maxlen"],  # 300
+            padding='max_length',  # 300
+            truncation=True)  # 超过最大长度截断处理
+        smiles_ids = torch.from_numpy(
+            np.array(encode_dict['input_ids'])).view(1, -1)  # smiles ----> tensor
+        smiles_mask = torch.from_numpy(
+            np.array(encode_dict['attention_mask'])).view(1, -1)
+    else:
+        smiles_ids = []
+        smiles_mask = []
+        for i in smiles_str:
+            encode_dict = build_tokenizer.encode_plus(
+                text=i,
+                max_length=config_json["dataset_config"]
+                ["smiles_maxlen"],
+                padding='max_length',
+                truncation=True)
+            smiles_ids.append(
+                torch.tensor(encode_dict['input_ids']))
+            smiles_mask.append(
+                torch.tensor(encode_dict['attention_mask']))
+        smiles_ids = torch.stack(smiles_ids)
+        smiles_mask = torch.stack(smiles_mask)
+    
     return [smiles_ids, smiles_mask]
 
 def pre_processing_ms(peaks_data, config_json):

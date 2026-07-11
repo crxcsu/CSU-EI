@@ -152,6 +152,12 @@ def calculate_all_topk(config_path,
         top_k += topk_np
         current_idx += B
 
+    save_dir = os.path.join(MAIN_PATH, exp_dir, 'plot_result_analyzer')
+    test_pd = pd.read_csv('data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv')
+    test_pd['rank23'] = rank23
+    test_pd = test_pd.drop_duplicates(subset=['smiles'], keep='first')    # Remove duplicate smiles
+    test_pd.to_csv(os.path.join(save_dir, f'test_unismiles_with_classification_{time_stamp}.csv'), index=False)
+
     print(top_k)
 
 def auto_eval_topk(config_path,
@@ -256,11 +262,12 @@ def auto_eval_topk(config_path,
     test_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                   config_json=config_json, mode='test', shuffle=False, batch_size=256)
     
-    modes = ['w/o mass filter', 'w/ mass filter ± 5Da', 'w/ formula filter']
+    modes = ['w/o filter', 'w/ mass filter ± 5Da', 'w/ formula filter']
     results = {mode: np.zeros(len(top_k_list)) for mode in modes}
     
     current_idx = 0
     total_samples = len(full_test_index_list)
+    rank23 = []
 
     for _, ms in tqdm(test_loader, desc="Evaluating"):
         ms = [x.to(device) for x in ms] # [ms_bin, ms_inten, ms_mw]
@@ -277,8 +284,9 @@ def auto_eval_topk(config_path,
         batch_test_indices = torch.tensor(full_test_index_list[current_idx:current_idx+B]).to(device)
 
         # --- Mode 1: No Filter ---
-        topk_1, _ = get_topk(base_score, batch_test_indices, top_k_list)
-        results['w/o mass filter'] += np.array(topk_1) * B
+        topk_1, ranks = get_topk(base_score, batch_test_indices, top_k_list)
+        rank23 += ranks
+        results['w/o filter'] += np.array(topk_1) * B
 
         # --- Mode 2: Mass Filter (± 5Da) ---
         score_2 = base_score.clone()
@@ -309,22 +317,27 @@ def auto_eval_topk(config_path,
         current_idx += B
 
     # -------------------- 5. Finalize & Save Results --------------------
-    # Normalize accumulated counts by total samples to get average Top-K accuracy
-    for key in results:
-        results[key] /= total_samples
-
-    df = pd.DataFrame.from_dict(results, orient='index', columns=top_k_list)
-    print(df)
-    
-    # Save to CSV
     save_dir = os.path.join(MAIN_PATH, exp_dir, 'plot_result_analyzer')
     os.makedirs(save_dir, exist_ok=True)
+
+    # Save Top-K accuracy table 
+    for key in results:
+        results[key] /= total_samples # Normalize Top-K results by total samples
+    df = pd.DataFrame.from_dict(results, orient='index', columns=top_k_list)
     output_path = os.path.join(save_dir, f'topk_evaluation_3modes_{time_stamp}.csv')
     df.to_csv(output_path)
-    print(f"Results saved to {output_path}")
+    print(df)
+
+    # Save per-molecule ranking results
+    test_pd = pd.read_csv('data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv')
+    test_pd['rank23'] = rank23  # Assign rank23 from evaluation
+    test_pd = test_pd.drop_duplicates(subset=['smiles'], keep='first')  # Remove duplicate SMILES
+    test_pd.to_csv(
+        os.path.join(save_dir, f'test_unismiles_with_classification_{time_stamp}.csv'),
+        index=False)
 
 
-def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o mass filter'):
+def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o filter'):
     exp_dir = os.path.dirname(config_path)
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
     topk_path = os.path.join(exp_dir, "plot_result_analyzer", f"topk_evaluation_3modes_{time_stamp}.csv")
