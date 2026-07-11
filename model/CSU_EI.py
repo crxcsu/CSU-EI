@@ -77,7 +77,7 @@ class SmilesModel(nn.Module):
                 hidden_size=feature_dim
             )
         
-        self.smiles_model = RobertaModel(config=self.smiles_config, add_pooling_layer=False)# 第二个参数也会影响到指标
+        self.smiles_model = RobertaModel(config=self.smiles_config, add_pooling_layer=False)
 
         if roberta_model_path is not None:
             pretrain_roberta_model_dict = torch.load(roberta_model_path)
@@ -147,6 +147,7 @@ class ESA_SMILES(nn.Module):
 
         return smi_feature, smi_score
 
+
 class ESA_MS(nn.Module):
     def __init__(self, feature_dim, out_dim):
         super().__init__()
@@ -169,11 +170,9 @@ class ESA_MS(nn.Module):
 
         return ms_feature, ms_score
 
+
 # ---------------transformer ms encoder------------------------
-
 class Attention(nn.Module):
-    """单头注意力机制"""
-
     def __init__(self, n_embed, n_heads, dropout):
         super().__init__()
         head_size = n_embed // n_heads
@@ -186,21 +185,18 @@ class Attention(nn.Module):
         x = ms  # ms_mask:  B, 100
         # print(x)
         B, T, C = x.shape
-        # 计算Q, K, V
         q = self.query(x)  # (B, T, C)
         k = self.key(x)
-        # 计算注意力分数
         wei = q @ k.transpose(-1, -2) / (C ** 0.5)  # (B, T, C) @ (B, C, T) = (B, T, T)
-        # 对wei进行掩码，
         mask = ms_mask.unsqueeze(1)
         wei = wei.masked_fill(mask == 0, -1e4)
         wei = F.softmax(wei, dim=-1)  # (B, T, T)
         wei = self.dropout(wei)
-        # 计算输出
         v = self.value(x)
         out = wei @ v  # (B, T, T) @ (B, T, C) = (B, T, C)
 
         return out 
+
 
 class MultiHead(nn.Module):
     def __init__(self, n_embed, n_heads, dropout):
@@ -228,6 +224,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.ffn(x)
 
+
 class Block(nn.Module):
     def __init__(self, n_embed, n_heads, dropout):
         super().__init__()
@@ -239,11 +236,11 @@ class Block(nn.Module):
 
     def forward(self, ms, ms_mask):
         # ms, ms_mask = pe_output[0], pe_output[1]
-        x = self.ln(ms + self.sa(ms, ms_mask))  # layernorm 加在注意力和feedfoward的输入前面， 在初始化是使他们成为单位均值，单位高斯分布
+        x = self.ln(ms + self.sa(ms, ms_mask))
         x = self.ln1(x + self.ffwd(x)) # residual connection
         return x, ms_mask
 
-# 对sinusoidal embedder做消融实验对比    
+
 class MSEmbedder(nn.Module):
     def __init__(self, max_mz, n_embed, dropout):
         super(MSEmbedder, self).__init__()
@@ -262,11 +259,12 @@ class MSEmbedder(nn.Module):
         output = self.ff(x)
         return output, ms_mask  # output (1, 101, 768)
 
+
 # sinusoidal embedder
 class SinusoidalEmbedder(nn.Module):
     def __init__(self, n_embed, dropout):
         super(SinusoidalEmbedder, self).__init__()
-        # [tensor(B, 2, 100), tensor(B, 100)]  峰数据tensor(mz , i)，和 ms mask
+        # [tensor(B, 2, 100), tensor(B, 100)]
         # tensor(B, 2, 100) ------> mz:(B, 100), i:(B, 100))
         self.mz_embed = nn.Sequential(nn.Linear(n_embed, n_embed),
                                       nn.ReLU(inplace=True),
@@ -280,26 +278,21 @@ class SinusoidalEmbedder(nn.Module):
         mz, intensity, ms_mask = input[0].squeeze(1), input[1].squeeze(1).unsqueeze(-1), input[2].squeeze(1)  # mz (B, 100) i (B, 100) ms_mask (B, 100)
         B, N = ms_mask.shape
         device = ms_mask.device
-        # 初始化[B, N, d_model]矩阵
         result = torch.ones((B, N, self.d_model), device=device)
-        # 初始化pos的序列，以符合广播机制
         pos = mz.unsqueeze(2)  # mz(B, 100, 1)
-        # 初始化i序列，只初始化偶数位置
         i = torch.arange(0, self.d_model, 2, device=device)
         div = 10000 ** (i / self.d_model)
         term = pos / div  # (B, 300, 384)
         result[:, :, 0::2] = torch.sin(term)
         result[:, :, 1::2] = torch.cos(term)
-        # 按照ms_mask的长度，将后面的位置置零
         # mz_mask = ms_mask.unsqueeze(2)
         # result = result.masked_fill(mz_mask == 0, 0)
         mz_embed = self.mz_embed(result)
-        #  加入强度
         x = torch.cat([intensity, mz_embed], dim=2)  # tensor(B, 100,768) ---> (B, 100, 769)
         output = self.ff(x)
         return output, ms_mask  # output (1, 101, 768)
 
-# 投影层
+
 class MSProjection(nn.Module):
     def __init__(self, n_embed):
         super().__init__()
@@ -313,39 +306,35 @@ class MSProjection(nn.Module):
     def forward(self, x):
         return self.dense(self.avgpool(x.transpose(1, 2)).squeeze(-1))
 
+
 class MSModel(nn.Module):
     def __init__(self, n_layer, n_embed, n_heads, dropout, ms_use_se, ms_use_esa, ms_use_gradient_checkpoint):
         super().__init__()
         self.ms_use_se = ms_use_se
         self.ms_use_esa = ms_use_esa
-        # 训练时使用checkpoint
         self.use_gradient_checkpoint = ms_use_gradient_checkpoint
         if self.ms_use_se:
-            self.pos_emb = SinusoidalEmbedder(n_embed, dropout)  # 位置嵌入层, (块大小, 嵌入维度)
+            self.pos_emb = SinusoidalEmbedder(n_embed, dropout)
         else:
             self.pos_emb = MSEmbedder(1660, n_embed, dropout) 
         self.blocks = nn.ModuleList([Block(n_embed, n_heads, dropout) for _ in range(n_layer)])
         if self.ms_use_esa:
             self.esa = ESA_MS(n_embed, n_embed)
-        # 用全局平均池化
         else:
             self.projection = MSProjection(n_embed)
 
     def forward(self, idx):
         ms, ms_mask = self.pos_emb(idx)  
-        # ------- 用checkpoint------------
         if self.use_gradient_checkpoint:
             device = ms.device
             dummy_tensor = torch.zeros(1, dtype=torch.float32, device=device, requires_grad=True)
-            ms = ms + dummy_tensor # 一开始是这里写错了
+            ms = ms + dummy_tensor
             for block in self.blocks:
                 ms, ms_mask = checkpoint(block, ms, ms_mask, use_reentrant=True)
-        # --------不使用checkpoint------------
         else:
             for block in self.blocks:
                 ms, ms_mask = block(ms, ms_mask)
 
-#############------------------- 是否使用esa -------------------------
         if self.ms_use_esa:
             ms_feature, ms_score = self.esa(ms, ms_mask)
         else:
