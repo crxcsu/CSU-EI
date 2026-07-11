@@ -17,6 +17,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 from analyzer.core import auto_eval_topk
 
+
 def main(main_path, seed=2023, config_file="config.json"):
     set_seed(seed)
     config_path = os.path.join(main_path, 'configs', config_file)
@@ -61,7 +62,6 @@ def main(main_path, seed=2023, config_file="config.json"):
     model = CSUEI(**config_json["model_config"]) 
     # model.Smiles_model.freeze_backbone()
 
-    # 计算模型可训练的参数量, 以及总参数量
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Trainable params: {trainable_params}, Total params: {total_params}")
@@ -94,12 +94,11 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         {"params": [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], "weight_decay": config['weight_decay']},
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0}
        ]
-    optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])  # AdamW优化器,weight_decay是正则化项
+    optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])
 
     if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
         state = torch.load(model_temp_path)
         model.load_state_dict(state['model'])
-        # 读取CSV文件恢复训练状态
         df = pd.read_csv(loss_record_csv_path)
         early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
         epoch = int(df.iloc[-1]['epoch'])
@@ -187,7 +186,7 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
             early_stop_cnt += 1
         
         torch.save(model.state_dict(), model_temp_path)
-        # 记录loss
+
         current_data = {
                 'timestamp': current_time,
                 'epoch': epoch,
@@ -200,12 +199,10 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         df_new = pd.DataFrame([current_data])
         df_new.to_csv(loss_record_csv_path, mode='a', header=not os.path.exists(loss_record_csv_path), index=False)
 
-        # 每10个epoch保存一次loss曲线
         if epoch % 1 == 0:
             fig_save_path = LOG_DIR + f'/loss_record/plot_loss_record.png'
             plot_loss_curve(loss_record_csv_path, fig_save_path)
 
-        # 打印学习率
         print("learning rate:{}".format(optimizer.param_groups[0]['lr']))
         print('epoch = {:4d}, train_loss = {:.4f}'.format(epoch, loss_train / count))
         print('epoch = {:4d}, dev_loss = {:.4f}'.format(epoch, dev_loss), 'dev_top1_accuracy = {:.4f}'.format(dev_top1))
@@ -214,7 +211,6 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     
     print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
     
-    # 删除临时模型文件
     if os.path.exists(model_temp_path):
         os.remove(model_temp_path)
         print(f"Removed temporary model file: {model_temp_path}")
@@ -222,10 +218,10 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
 def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     config = config_json['training_config']
-    dist.init_process_group(backend='nccl') # 【集合通讯】其他进程连master，大家互认
+    dist.init_process_group(backend='nccl')
     rank=dist.get_rank()
     world_size=dist.get_world_size()
-    # 断言：确保实际运行的 GPU 数量与配置文件一致
+
     assert world_size == config['use_distributed'], \
         f"Configured for {config['use_distributed']} GPUs but running with {world_size} GPUs."
     local_rank = int(os.environ["LOCAL_RANK"])
@@ -250,8 +246,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         {"params": [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], "weight_decay": config['weight_decay']},
         {"params": [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], "weight_decay": 0.0}
        ]
-    optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])  # AdamW优化器,weight_decay是正则化项
-
+    optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])
     n_epochs = config['n_epochs']
     model_path = LOG_DIR + config['model_save_path'] + model_suffix + '.pth'
     model_temp_path = LOG_DIR + config['model_save_path_temp'] + model_suffix + '.pth'
@@ -261,7 +256,6 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         state = torch.load(model_temp_path)
         if rank==0:
             model.load_state_dict(state['model'])
-        # 读取CSV文件恢复训练状态
         df = pd.read_csv(loss_record_csv_path)
         early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
         epoch = int(df.iloc[-1]['epoch'])
