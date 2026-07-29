@@ -21,30 +21,32 @@ def get_cos_distance(input_1, input_2):
     input_1 = input_1 / input_1.norm(dim=-1, keepdim=True)
     input_2 = input_2 / input_2.norm(dim=-1, keepdim=True)
     return input_1 @ input_2.t()
-# -------------------------------------按batch计算topk---------------------------------
+
+# -------------------------------------Calculate topk by batch---------------------------------
 def get_topk(score, ms_index, k: list):
     """
-    :param score(N, M): 点积矩阵
-    :param ms_index(N, 1): ms索引, 从0开始, 一维, 表示此质谱对应真实smiles在数据库中的索引
+    :param score(N, M): dot product matrix
+    :param ms_index(N, 1): ms index, starts from 0, 1-dimensional, represents the database index of the true smiles corresponding to this mass spectrum
     :param k (int): topk
     """
     assert score.shape[0] == ms_index.shape[0]
    
-    score_sorted = torch.argsort(score, dim=1, descending=True) # 按排序结果返回对应值的索引
+    score_sorted = torch.argsort(score, dim=1, descending=True)  # return indices corresponding to sorted values
     tpk = []
     ranks = []
     for i in k:
         score_topk = score_sorted[:, :i]
         ms_matched = score_topk == ms_index.view(-1, 1)
-        # 找到ms_matched中每一行为True的索引
+        # Find indices of True entries in each row of ms_matched
         # ms_matched_index = torch.nonzero(ms_matched) # (N, 2)
-        tpk.append((ms_matched.sum()/ms_index.shape[0]).item()) #/ms_index.shape[0]).item()
+        tpk.append((ms_matched.sum() / ms_index.shape[0]).item())
 
     for i in range(score.shape[0]):
         rank = (score_sorted[i] == ms_index[i]).nonzero(as_tuple=True)[0].item() + 1
         ranks.append(rank)
 
     return tpk, ranks
+
 
 def calculate_all_topk(config_path, 
                        test_index_list_path='data/nist23_data/test23/test_index_list.json', 
@@ -59,10 +61,10 @@ def calculate_all_topk(config_path,
     with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
         config_json = json.loads(f.read())
 
-    # 1 加载模型
+    # 1 Load the model
     device = config_json['device']
     exp_dir = config_json["training_config"]["experiment_dir"]
-    time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
 
     config_json["model_config"]["roberta_model_path"] = None
@@ -78,7 +80,7 @@ def calculate_all_topk(config_path,
     model = model.to(device)
     model.eval()
 
-    # 2 计算mainlib all uni feature
+    # 2 Calculate mainlib all uni feature
     feature_path =  os.path.join(MAIN_PATH, exp_dir, f'mainlib_all_uni_feature/mainlib{config_json["dataset_config"]["nist"]}_smiles_feature_{time_stamp}.pth')
     os.makedirs(os.path.dirname(feature_path), exist_ok=True)
     if not os.path.exists(feature_path):
@@ -97,11 +99,10 @@ def calculate_all_topk(config_path,
         print("Feature file detected. Loading pre-computed features...")
         smiles_feature = torch.load(feature_path)
 
-    # 3 计算test topk
+    # 3 Calculate test topk
     test_dataloader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
                                      config_json=config_json, mode='test', shuffle=False, batch_size=256)
     
-    # --- FIX: Load lists once before the loop ---
     with open(os.path.join(MAIN_PATH, test_index_list_path), 'r') as f:
         full_test_index_list = json.load(f)
     
@@ -131,12 +132,12 @@ def calculate_all_topk(config_path,
             print("use mass filter")
             with open(os.path.join(MAIN_PATH, mw_list_path), 'r') as f:
                 mw_list = json.load(f)
-            mw_data = torch.tensor(mw_list).to(device) # (262157)
+            mw_data = torch.tensor(mw_list).to(device)
             mw_data = mw_data.expand(B, D)
             mw_batch = mw_data.gather(1, test_index.unsqueeze(1)).expand(B, D) # (B, D)
             mw_low = mw_batch - 5
             mw_high = mw_batch + 5
-            filter = (mw_data >= mw_low) & (mw_data <= mw_high) # 过滤出质量差在5以内的
+            filter = (mw_data >= mw_low) & (mw_data <= mw_high) # Filter out those with a quality level of 5 or below.
             score[~filter] = -1
             
         # -----------------formula filter----------------
@@ -148,7 +149,7 @@ def calculate_all_topk(config_path,
         
         topk, ranks = get_topk(score, test_index, top_k_list)
         rank23 += ranks
-        topk_np = np.array(topk) * B / total_samples  # 乘以topk权重
+        topk_np = np.array(topk) * B / total_samples  
         top_k += topk_np
         current_idx += B
 
@@ -160,7 +161,8 @@ def calculate_all_topk(config_path,
 
     print(top_k)
 
-def auto_eval_topk(config_path,
+
+def auto_eval_topk(config_path, dev_path=None,
                    MAIN_PATH=os.getcwd(),
                    top_k_list=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]):
     """
@@ -187,18 +189,21 @@ def auto_eval_topk(config_path,
 
     device = config_json['device']
     exp_dir = config_json["training_config"]["experiment_dir"]
-    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
+    time_stamp = '_'.join(exp_dir.split('_')[-2:])
 
-    if config_json["dataset_config"]["nist"] == 23:
-        test_index_list_path='data/nist23_data/test23/test_index_list.json'   
-        mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json'     
-        formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json'
-        test_formula_list_path='data/nist23_data/test23/test_formula_list.json'
-    elif config_json["dataset_config"]["nist"] == 17:
-        test_index_list_path='data/nist17_data/test_nist17/test_index_list.json'
-        mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json'  
-        formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json'
-        test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
+    if dev_path is None:
+        if config_json["dataset_config"]["nist"] == 23:
+            test_index_list_path='data/nist23_data/test23/test_index_list.json'
+            mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json'     
+            formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json'
+            test_formula_list_path='data/nist23_data/test23/test_formula_list.json'   
+        elif config_json["dataset_config"]["nist"] == 17:
+            test_index_list_path='data/nist17_data/test_nist17/test_index_list.json'
+            mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json'  
+            formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json'
+            test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
+    else:
+        test_index_list_path = dev_path
         
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
 
@@ -259,8 +264,12 @@ def auto_eval_topk(config_path,
         full_test_formula_indices.append(torch.tensor(indices, device=device))
 
     # -------------------- 4. Evaluation Loop --------------------
-    test_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
-                                  config_json=config_json, mode='test', shuffle=False, batch_size=256)
+    if dev_path is None:
+        test_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
+                                    config_json=config_json, mode='test', shuffle=False, batch_size=256)
+    else:
+        test_loader = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=MAIN_PATH, 
+                                    config_json=config_json, mode='dev', shuffle=False, batch_size=256)
     
     modes = ['w/o filter', 'w/ mass filter ± 5Da', 'w/ formula filter']
     results = {mode: np.zeros(len(top_k_list)) for mode in modes}
@@ -324,23 +333,30 @@ def auto_eval_topk(config_path,
     for key in results:
         results[key] /= total_samples # Normalize Top-K results by total samples
     df = pd.DataFrame.from_dict(results, orient='index', columns=top_k_list)
-    output_path = os.path.join(save_dir, f'topk_evaluation_3modes_{time_stamp}.csv')
+    if dev_path is None:
+        output_path = os.path.join(save_dir, f'topk_evaluation_3modes_{time_stamp}.csv')
+    else:
+        output_path = os.path.join(save_dir, f'dev_topk_evaluation_3modes_{time_stamp}.csv')
     df.to_csv(output_path)
     print(df)
 
-    # Save per-molecule ranking results
-    test_pd = pd.read_csv('data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv')
-    test_pd['rank23'] = rank23  # Assign rank23 from evaluation
-    test_pd = test_pd.drop_duplicates(subset=['smiles'], keep='first')  # Remove duplicate SMILES
-    test_pd.to_csv(
-        os.path.join(save_dir, f'test_unismiles_with_classification_{time_stamp}.csv'),
-        index=False)
+    if dev_path is None and config_json["dataset_config"]["nist"] == 23:
+        # Save per-molecule ranking results
+        test_pd = pd.read_csv('data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv')
+        test_pd['rank23'] = rank23  # Assign rank23 from evaluation
+        test_pd = test_pd.drop_duplicates(subset=['smiles'], keep='first')  # Remove duplicate SMILES
+        test_pd.to_csv(
+            os.path.join(save_dir, f'test_unismiles_with_classification_{time_stamp}.csv'),
+            index=False)
 
 
-def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o filter'):
+def get_topk_acc(config_path, k_list=['1', '5','10'], label='w/o filter', mode=None):
     exp_dir = os.path.dirname(config_path)
-    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
-    topk_path = os.path.join(exp_dir, "plot_result_analyzer", f"topk_evaluation_3modes_{time_stamp}.csv")
+    time_stamp = '_'.join(exp_dir.split('_')[-2:])
+    if mode is None: 
+        topk_path = os.path.join(exp_dir, "plot_result_analyzer", f"topk_evaluation_3modes_{time_stamp}.csv")
+    else:
+        topk_path = os.path.join(exp_dir, "plot_result_analyzer", f"dev_topk_evaluation_3modes_{time_stamp}.csv")
     df = pd.read_csv(topk_path, index_col=0)
     values = df.loc[label, k_list].values * 100
     return list(values), df
@@ -363,7 +379,7 @@ def get_data_and_features(config_path, data, batch_size=1, epoch=None, MAIN_PATH
     with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
             config_json = json.loads(f.read())
     exp_dir = config_json["training_config"]["experiment_dir"]
-    time_stamp = '_'.join(exp_dir.split('_')[-2:]) # 获取路径最后的时间戳部分
+    time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
 
     smiles_ids, smiles_mask, mz, intensity, ms_mask = load_analysis_data(data, config_json)
 
@@ -476,13 +492,31 @@ def plot_loss_curve(loss_record_csv_path, fig_save_path):
     line3, = ax2.plot(epoch_list, dev_top1_list, color='green', linewidth=1, label='dev_top1')
     ax2.tick_params(axis='y')
 
-    # 创建一个图例包含所有的线
     lines = [line1, line2, line3]
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='right')
     fig.tight_layout()
     plt.savefig(fig_save_path, dpi=300)
     # plt.close()
+
+
+def plot_distance_curve(distance_record_csv_path, fig_save_path):
+    df = pd.read_csv(distance_record_csv_path)
+    epoch_list = df['epoch'].tolist()
+    train_distance_list = df['train_distance'].tolist()
+    
+    fig, ax1 = plt.subplots()
+    ax1.set_xlabel('epoch')
+    ax1.set_ylabel('cosine distance')
+    line1, = ax1.plot(epoch_list, train_distance_list, color='red', linewidth=1, label='train_cosine_distance')
+    ax1.tick_params(axis='y')
+
+    lines = [line1]
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='right')
+    fig.tight_layout()
+    if fig_save_path is not None:
+        plt.savefig(fig_save_path, dpi=300)
 
 
 def save_aspirin_feature(model,config_json, epoch):
@@ -562,6 +596,7 @@ def find_functional_group_pairs(json_path, smarts_transform, max_pairs=2):
                     # Avoid duplicates from symmetric reaction sites by checking last added
                     if len(found_pairs) >= max_pairs: return found_pairs
     return found_pairs
+
 
 def find_and_visualize_pairs(json_path, smarts_transform, max_pairs=5):
     from rdkit import Chem
@@ -644,6 +679,7 @@ def find_and_visualize_pairs(json_path, smarts_transform, max_pairs=5):
                     print(f"Reached max_pairs limit ({max_pairs}). Stopping.")
                     return
 
+
 def search_pair(query_id, transform_smart, smi_map, id_map):
     from rdkit.Chem import AllChem, Draw
     from IPython.display import display
@@ -686,21 +722,3 @@ def search_pair(query_id, transform_smart, smi_map, id_map):
 
     except Exception as e:
         print(f"Error: {e}")
-
-# 对向量进行可视化
-# from sklearn.manifold import TSNE
-# import numpy as np
-# import matplotlib.pyplot as plt
-
-# tsne = TSNE(n_components=2, init='pca', random_state=0)
-# smi_feature = smi_feature.cpu().numpy()
-# ms_feature = ms_feature.cpu().numpy()
-# feature = np.concatenate((smi_feature, ms_feature), axis=0)
-# feature = tsne.fit_transform(feature)
-# smi_feature = feature[:smi_feature.shape[0]]
-# ms_feature = feature[smi_feature.shape[0]:]
-# plt.figure()
-# plt.scatter(smi_feature[:, 0], smi_feature[:, 1], c='r', label='smi')
-# plt.scatter(ms_feature[:, 0], ms_feature[:, 1], c='b', label='ms')
-# plt.legend()
-# plt.savefig('data/feature/aspirin_feature/aspirin_feature_epoch{}.png'.format(epoch))

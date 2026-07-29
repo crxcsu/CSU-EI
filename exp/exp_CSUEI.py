@@ -27,16 +27,16 @@ def main(main_path, seed=2023, config_file="config.json"):
     if config_json["training_config"]["experiment_dir"] is None:
         time_stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
         folder_id = 'CSUEI_nist{}_smil{}_msl{}_bs{}_DDP{}_lr{:.1e}_smiesa{}_msesa{}_rm{}_se{}_{}'.format(
-                    config_json["dataset_config"]["nist"],  # nist 数据集编号
-                    config_json["model_config"]["num_hidden_layers"],  # smile_layer 缩写为 smil
-                    config_json["model_config"]["ms_layer"],  # ms_layer 缩写为 msl                    
-                    config_json["training_config"]["batch_size"],  # batch_size 缩写为 bs
-                    config_json["training_config"]["use_distributed"],  # distributed data parallel 缩写为 DDP                    
-                    config_json["training_config"]["lr"],  # learning rate 缩写为 lr
-                    1 if config_json["model_config"]["smile_use_esa"] else 0,  # smile_use_esa 缩写为 smiesa
-                    1 if config_json["model_config"]["ms_use_esa"] else 0,  # ms_use_esa 缩写为 msesa
-                    1 if config_json["model_config"]["roberta_model_path"] else 0,  # roberta_model_path 缩写为 rm
-                    1 if config_json["model_config"]["ms_use_se"] else 0,  # ms_use_se 缩写为 se
+                    config_json["dataset_config"]["nist"],  # nist dataset index
+                    config_json["model_config"]["num_hidden_layers"],  # smile_layer abbreviation: smil
+                    config_json["model_config"]["ms_layer"],  # ms_layer abbreviation: msl                    
+                    config_json["training_config"]["batch_size"],  # batch_size abbreviation: bs
+                    config_json["training_config"]["use_distributed"],  # distributed data parallel abbreviation: DDP                    
+                    config_json["training_config"]["lr"],  # learning rate abbreviation: lr
+                    1 if config_json["model_config"]["smile_use_esa"] else 0,  # smile_use_esa abbreviation: smiesa
+                    1 if config_json["model_config"]["ms_use_esa"] else 0,  # ms_use_esa abbreviation: msesa
+                    1 if config_json["model_config"]["roberta_model_path"] else 0,  # roberta_model_path abbreviation: rm
+                    1 if config_json["model_config"]["ms_use_se"] else 0,  # ms_use_se abbreviation: se
                     time_stamp
                 )
         config_json["training_config"]["experiment_dir"] = os.path.join("results", folder_id)
@@ -49,16 +49,16 @@ def main(main_path, seed=2023, config_file="config.json"):
         print('continue training in existing folder:', LOG_DIR)
         time_stamp = '_'.join(LOG_DIR.split('_')[-2:])
     
-    # 打印配置参数
+    # Print configuration parameters
     print("\n" + "="*30 + " Configuration " + "="*30)
     print(json.dumps(config_json, indent=4))
     print("="*75 + "\n")
 
-    # 准备数据集
+    # Prepare datasets
     tr_set = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=main_path, config_json=config_json, mode='train')
     dv_set = prep_dataloader(nist=config_json["dataset_config"]["nist"], src_data_path=main_path, config_json=config_json, mode='dev')
 
-    # 使用**操作符将config_json["model_config"]字典解包为关键字参数，传递给ModelCLR类的构造函数，用于初始化模型
+    # Unpack config_json["model_config"] dict as keyword arguments and pass to CSUEI constructor for model initialization
     model = CSUEI(**config_json["model_config"]) 
     # model.Smiles_model.freeze_backbone()
 
@@ -110,23 +110,23 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         max_dev_top1 = 0
         dev_min_loss = float('inf')
     
-    # ------把预训练的Roberta模型的参数冻结----------------
+    # ------Freeze parameters of pretrained Roberta model----------------
     # for name, para in model.named_parameters():
     #     if "Smiles_model.model.embeddings" in name:
     #         para.requires_grad_(False)
     #     elif "Smiles_model.model.encoder" in name:
     #         para.requires_grad_(False)
-    # -----------------冻结Roberta模型的参数-----------------
+    # -----------------Freeze Roberta model parameters-----------------
     # model.Smiles_model.freeze_backbone()
 
-    # warm up 和 学习率衰减
+    # Warm up and learning rate decay
     total_steps = len(tr_set) * n_epochs
     # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
-    #                                             num_training_steps=total_steps, num_cycles=20)  # restart 重新恢复学习率
+    #                                             num_training_steps=total_steps, num_cycles=20)  # restart recover learning rate
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
                                                 num_training_steps=total_steps)
 
-    scaler = GradScaler()   # 用于混合精度训练
+    scaler = GradScaler()   # For mixed precision training
     model.to(device)
     
     while epoch < n_epochs:
@@ -135,27 +135,30 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         print('\nmodel is training...  epoch:{}'.format(epoch))
         current_time = datetime.datetime.now()
         loss_train = 0
+        distance_train = 0
         count = 0
-        # print("temperature:{}".format(loss.temperature)) # 打印出loss函数的temperature的值
         for smi, ms in tqdm(tr_set):
             optimizer.zero_grad()
-            smi[0] = smi[0].to(device)  # smi是个list，
-            smi[1] = smi[1].to(device)  # smi[0]是input_ids, smi[1]是attention_mask
+            smi[0] = smi[0].to(device) 
+            smi[1] = smi[1].to(device)  
             ms[0] = ms[0].to(device)
             ms[1] = ms[1].to(device)
             ms[2] = ms[2].to(device)
-            # ---------------- 混合精度训练----------------
+            # ---------------- Mixed precision training----------------
             with autocast():
                 # smi_smi, smi_mask = smi
                 # ms_mz, ms_i, ms_mask = ms
                 # smi_feature, smi_score, ms_feature, ms_score = model(smi_smi, smi_mask, ms_mz, ms_i, ms_mask) 
                 smi_feature, smi_score, ms_feature, ms_score = model(smi, ms) 
                 loss_epoch = loss(smi_feature, ms_feature)
+                smi_norm = torch.nn.functional.normalize(smi_feature, dim=-1)
+                ms_norm = torch.nn.functional.normalize(ms_feature, dim=-1)
+                distance_epoch = (1 - torch.nn.functional.cosine_similarity(smi_norm, ms_norm, dim=-1)).mean()
             scaler.scale(loss_epoch).backward()
             scaler.step(optimizer)
             scheduler.step() 
             scaler.update()
-            # # ----------------不使用混合精度训练----------------
+            # # ----------------Training without mixed precision----------------
             # smi_feature, smi_score, ms_feature, ms_score = model(smi, ms)
             # loss_epoch = loss(smi_feature, ms_feature)
             # loss_epoch.backward()
@@ -164,16 +167,21 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
             if device == 'cpu':
                 loss_train += loss_epoch.detach().cpu().item()
+                distance_train += distance_epoch.detach().cpu().item()
             else:
                 loss_train += loss_epoch.detach().cuda().item()
+                distance_train += distance_epoch.detach().cuda().item()
             count += 1
         
         # After each epoch, test your model on the validation (development) set.
         dev_loss, dev_top1 = dev(dv_set, model, device)
 
-        if  epoch <= 5:
-            torch.save(model.state_dict(), LOG_DIR + config['model_save_path'] + f"epoch{epoch}_" + model_suffix + '.pth')
-            print(f'Saving model for early epoch (epoch = {epoch:4d})')
+        if epoch in (1, 3):
+            torch.save(
+                model.state_dict(),
+                LOG_DIR + config['model_save_path'] + f"epoch{epoch}_" + model_suffix + '.pth'
+            )
+            print(f'Saving model at epoch = {epoch:4d}')
 
         if dev_top1 > max_dev_top1:
             # Save model if your model improved
@@ -191,6 +199,7 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
                 'timestamp': current_time,
                 'epoch': epoch,
                 'train_loss': loss_train / count,
+                'train_distance': distance_train / count,
                 'dev_loss': dev_loss,
                 'dev_top1': dev_top1,
                 'learning_rate': optimizer.param_groups[0]['lr'],
@@ -267,22 +276,22 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         max_dev_top1 = 0
         dev_min_loss = float('inf')
     
-    # ------把预训练的Roberta模型的参数冻结----------------
+    # ------Freeze parameters of pretrained Roberta model----------------
     # for name, para in model.named_parameters():
     #     if "Smiles_model.model.embeddings" in name:
     #         para.requires_grad_(False)
     #     elif "Smiles_model.model.encoder" in name:
     #         para.requires_grad_(False)
-    # -----------------冻结Roberta模型的参数-----------------
+    # -----------------Freeze Roberta model parameters-----------------
     # model.Smiles_model.freeze_backbone()
 
-    # warm up 和 学习率衰减
+    # Warm up and learning rate decay
     # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
-    #                                             num_training_steps=total_steps, num_cycles=20)  # restart 重新恢复学习率
+    #                                             num_training_steps=total_steps, num_cycles=20)  # restart recover learning rate
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
                                                 num_training_steps=len(train_loader)*n_epochs)
 
-    scaler = GradScaler()   # 用于混合精度训练
+    scaler = GradScaler()   # For mixed precision training
     while epoch < n_epochs:
         train_sampler.set_epoch(epoch)
         model.train()
@@ -290,25 +299,29 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         if rank==0:
             print('\nmodel is training...  epoch:{}'.format(epoch))
         loss_train = 0
+        distance_train = 0
         count = 0
         current_time = datetime.datetime.now()
-        # print("temperature:{}".format(loss.temperature)) # 打印出loss函数的temperature的值
+        # print("temperature:{}".format(loss.temperature)) # Print temperature value of loss function
         for smi, ms in tqdm(train_loader, disable=dist.get_rank() != 0):
             optimizer.zero_grad()
-            smi[0] = smi[0].to(device)  # smi是个list，
-            smi[1] = smi[1].to(device)  # smi[0]是input_ids, smi[1]是attention_mask
+            smi[0] = smi[0].to(device)  # smi is a list
+            smi[1] = smi[1].to(device)  # smi[0] is input_ids, smi[1] is attention_mask
             ms[0] = ms[0].to(device)
             ms[1] = ms[1].to(device)
             ms[2] = ms[2].to(device)
-            # ---------------- 混合精度训练----------------
+            # ---------------- Mixed precision training----------------
             with autocast():
                 smi_feature, smi_score, ms_feature, ms_score = model(smi, ms) 
                 loss_epoch = loss(smi_feature, ms_feature)
+                smi_norm = torch.nn.functional.normalize(smi_feature, dim=-1)
+                ms_norm = torch.nn.functional.normalize(ms_feature, dim=-1)
+                distance_epoch = (1 - torch.nn.functional.cosine_similarity(smi_norm, ms_norm, dim=-1)).mean()
             scaler.scale(loss_epoch).backward()
             scaler.step(optimizer)
             scheduler.step() 
             scaler.update()
-            # # ----------------不使用混合精度训练----------------
+            # # ----------------Training without mixed precision----------------
             # smi_feature, smi_score, ms_feature, ms_score = model(smi, ms)
             # loss_epoch = loss(smi_feature, ms_feature)
             # loss_epoch.backward()
@@ -316,13 +329,18 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
             # scheduler.step()
             if device == 'cpu':
                 loss_train += loss_epoch.detach().cpu().item()
+                distance_train += distance_epoch.detach().cpu().item()
             else:
                 loss_train += loss_epoch.detach().cuda().item()
+                distance_train += distance_epoch.detach().cuda().item()
             count += 1
 
         avg_loss_local = loss_train / count
         avg_loss_tensor = torch.tensor(avg_loss_local, device=device)
         dist.reduce(avg_loss_tensor, dst=0, op=dist.ReduceOp.SUM)
+        avg_distance_local = distance_train / count
+        avg_distance_tensor = torch.tensor(avg_distance_local, device=device)
+        dist.reduce(avg_distance_tensor, dst=0, op=dist.ReduceOp.SUM)
 
         if rank==0:
             # After each epoch, test your model on the validation (development) set.
@@ -342,10 +360,12 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
             # record
             avg_train_loss = avg_loss_tensor.item() / world_size
+            avg_train_distance = avg_distance_tensor.item() / world_size
             current_data = {
                     'timestamp': current_time,
                     'epoch': epoch,
                     'train_loss': avg_train_loss,
+                    'train_distance': avg_train_distance,
                     'dev_loss': dev_loss,
                     'dev_top1': dev_top1,
                     'learning_rate': optimizer.param_groups[0]['lr'],
@@ -354,20 +374,20 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
             df_new = pd.DataFrame([current_data])
             df_new.to_csv(loss_record_csv_path, mode='a', header=not os.path.exists(loss_record_csv_path), index=False)
 
-            # 每1个epoch保存一次loss曲线
+            # Save loss curve every 1 epoch
             if epoch % 1 == 0:
                 fig_save_path = LOG_DIR + f'/loss_record/plot_loss_record.png'
                 plot_loss_curve(loss_record_csv_path, fig_save_path)
 
-            # 打印学习率
+            # Print learning rate
             print("learning rate:{}".format(optimizer.param_groups[0]['lr']))
             print('epoch = {:4d}, train_loss = {:.4f}'.format(epoch, avg_train_loss))
             print('epoch = {:4d}, dev_loss = {:.4f}'.format(epoch, dev_loss), 'dev_top1_accuracy = {:.4f}'.format(dev_top1))
 
-        # 等待 Rank 0 跑完验证
+        # Wait for Rank 0 to finish validation
         dist.barrier() 
 
-        # 广播 early_stop_cnt 给所有进程
+        # Broadcast early_stop_cnt to all processes
         early_stop_tensor = torch.tensor(early_stop_cnt, dtype=torch.int, device=device)
         dist.broadcast(early_stop_tensor, src=0)
         early_stop_cnt = early_stop_tensor.item()
@@ -377,7 +397,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     if rank==0:
         print('Finished training after {} epochs, max_dev_top1: {:.4f})'.format(epoch, max_dev_top1))
 
-        # 删除临时模型文件
+        # Delete temporary model file
         if os.path.exists(model_temp_path):
             os.remove(model_temp_path)
             print(f"Removed temporary model file: {model_temp_path}")
@@ -401,12 +421,12 @@ def dev(dv_set, model, device):
         with torch.no_grad():
             # smi_smi, smi_mask = smi
             # ms_mz, ms_i, ms_mask = ms
-            # smi_feature, smi_score, ms_feature, ms_score = model(smi_smi, smi_mask, ms_mz, ms_i, ms_mask) 
-            smi_feature, smi_score, ms_feature, ms_score = model(smi, ms)   
+            # smi_feature, smi_score, ms_feature, ms_score = model(smi_smi, smi_mask, ms_mz, ms_i, ms_mask)
+            smi_feature, smi_score, ms_feature, ms_score = model(smi, ms)
             B = smi_feature.shape[0]
             i += B
             temp_loss = loss(smi_feature, ms_feature)
-            smi_feature = smi_feature / smi_feature.norm(dim=-1, keepdim=True)  # 除以模长，归一化
+            smi_feature = smi_feature / smi_feature.norm(dim=-1, keepdim=True)  # Normalize by norm
             ms_feature = ms_feature / ms_feature.norm(dim=-1, keepdim=True)
             smi_list.append(smi_feature)
             ms_list.append(ms_feature)
@@ -414,12 +434,12 @@ def dev(dv_set, model, device):
             total_loss += temp_loss.detach().cpu().item()
         else:
             total_loss += temp_loss.detach().cuda().item()
-    
+
     smi_feature = torch.cat(smi_list, dim=0)
     ms_feature = torch.cat(ms_list, dim=0)
     cos_distance = ms_feature @ smi_feature.T
-    label = torch.arange(0, i).to(device)  # 对角线上为标签
-    pred = torch.argmax(cos_distance, dim=1)  # 得到每一行余弦相似度最大的
+    label = torch.arange(0, i).to(device)  # Labels lie on the diagonal
+    pred = torch.argmax(cos_distance, dim=1)  # Get indices with maximum cosine similarity for each row
     num_correct = (pred == label).sum().item()
 
     total_loss = total_loss / len(dv_set)
