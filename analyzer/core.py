@@ -76,7 +76,7 @@ def calculate_all_topk(config_path,
     new_state_dict = {}
     state_dict = torch.load(model_path, map_location=device)
     new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-    model.load_state_dict(new_state_dict, strict=True)
+    model.load_state_dict(new_state_dict, strict=False)
     model = model.to(device)
     model.eval()
 
@@ -215,7 +215,7 @@ def auto_eval_topk(config_path, dev_path=None,
     # Load state dict handling DDP wrapper
     state_dict = torch.load(model_path, map_location=device)
     new_state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
-    model.load_state_dict(new_state_dict, strict=True)
+    model.load_state_dict(new_state_dict, strict=False)
     model.to(device).eval()
 
     # -------------------- 2. Precompute/Load Library Features --------------------
@@ -394,7 +394,7 @@ def get_data_and_features(config_path, data, batch_size=1, epoch=None, MAIN_PATH
         config_json["model_config"]["ms_use_se"] = True
         
     model = CSUEI(**config_json["model_config"])
-    model.load_state_dict(model_dict)
+    model.load_state_dict(model_dict, strict=False)
     model.to(config_json["device"])
     model.eval()
 
@@ -505,15 +505,17 @@ def plot_distance_curve(distance_record_csv_path, fig_save_path):
     epoch_list = df['epoch'].tolist()
     train_distance_list = df['train_distance'].tolist()
     
-    fig, ax1 = plt.subplots()
-    ax1.set_xlabel('epoch')
-    ax1.set_ylabel('cosine distance')
-    line1, = ax1.plot(epoch_list, train_distance_list, color='red', linewidth=1, label='train_cosine_distance')
-    ax1.tick_params(axis='y')
+    fig, ax1 = plt.subplots(figsize=(8, 8))
+    plt.rcParams['font.size'] = 50
+    
+    ax1.set_xlabel('Epoch', fontsize=16)
+    ax1.set_ylabel('Cosine Distance', fontsize=16)
+    line1, = ax1.plot(epoch_list, train_distance_list, color='red', linewidth=1.2, label='Train Cosine Distance')
+    ax1.tick_params(axis='both', labelsize=13)
 
     lines = [line1]
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='right')
+    ax1.legend(lines, labels, loc='right', fontsize=14)
     fig.tight_layout()
     if fig_save_path is not None:
         plt.savefig(fig_save_path, dpi=300)

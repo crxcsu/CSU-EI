@@ -98,7 +98,7 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
     if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
         state = torch.load(model_temp_path)
-        model.load_state_dict(state['model'])
+        model.load_state_dict(state['model'], strict=False)
         df = pd.read_csv(loss_record_csv_path)
         early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
         epoch = int(df.iloc[-1]['epoch'])
@@ -264,7 +264,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
         state = torch.load(model_temp_path)
         if rank==0:
-            model.load_state_dict(state['model'])
+            model.load_state_dict(state['model'], strict=False)
         df = pd.read_csv(loss_record_csv_path)
         early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
         epoch = int(df.iloc[-1]['epoch'])
