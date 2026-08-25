@@ -223,7 +223,7 @@ def load_analysis_data(analysis_data, config_json):
 
 def pre_processing_smi(smiles_str, tokenizer, config_json):
     if isinstance(smiles_str, str):  # 判断smiles_str是否为字符串类型
-        encode_dict = tokenizer.encode_plus(
+        encode_dict = tokenizer(
             text=smiles_str,  # 输入的smiles字符串
             max_length=config_json["dataset_config"]["smiles_maxlen"],  # 300
             padding='max_length',  # 300
@@ -237,7 +237,7 @@ def pre_processing_smi(smiles_str, tokenizer, config_json):
         smiles_ids = []
         smiles_mask = []
         for i in smiles_str:
-            encode_dict = build_tokenizer.encode_plus(
+            encode_dict = tokenizer(
                 text=i,
                 max_length=config_json["dataset_config"]
                 ["smiles_maxlen"],
@@ -255,7 +255,7 @@ def pre_processing_smi_with_canonical(smiles_str, tokenizer, config_json):
     if isinstance(smiles_str, str):  # 判断smiles_str是否为字符串类型
         # 使用rdkit将smiles字符串转换为标准格式
         smiles_str = Chem.MolToSmiles(Chem.MolFromSmiles(smiles_str))
-        encode_dict = tokenizer.encode_plus(
+        encode_dict = tokenizer(
             text=smiles_str,  # 输入的smiles字符串
             max_length=config_json["dataset_config"]["smiles_maxlen"],  # 300
             padding='max_length',  # 300
@@ -268,7 +268,7 @@ def pre_processing_smi_with_canonical(smiles_str, tokenizer, config_json):
         smiles_ids = []
         smiles_mask = []
         for i in smiles_str:
-            encode_dict = build_tokenizer.encode_plus(
+            encode_dict = tokenizer(
                 text=i,
                 max_length=config_json["dataset_config"]
                 ["smiles_maxlen"],

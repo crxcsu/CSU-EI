@@ -81,7 +81,7 @@ class SmilesModel(nn.Module):
 
         if roberta_model_path is not None:
             pretrain_roberta_model_dict = torch.load(roberta_model_path)
-            self.smiles_model.load_state_dict(pretrain_roberta_model_dict, strict=True)
+            self.smiles_model.load_state_dict(pretrain_roberta_model_dict, strict=False)
             print('load pretrain smiles model success')
             
         self.smile_use_esa = smile_use_esa
