@@ -6,7 +6,6 @@ from tqdm import tqdm
 from model.tokenizer import build_tokenizer
 from rdkit import Chem
 import ast
-# from torch.nn.utils.rnn import pad_sequence
 
 class NIST17Dataset(Dataset):
     def __init__(self,
@@ -24,64 +23,47 @@ class NIST17Dataset(Dataset):
             for i in tqdm(range(data_end)):
                 begin, end = i * 1000 + 1, (i + 1) * 1000
                 filename = "/data/nist17_data/train_nist17/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+                with open(path + filename, 'r') as fp:  
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                     self.data.append(target_data)
             # flag = ((i % 5) in [2])
         elif mode == 'dev':
             filename = "/data/nist17_data/dev_nist17/dev.json"
-            with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+            with open(path + filename, 'r') as fp:  
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                 self.data.append(target_data)
             # flag = (i % 10 == 8)
         elif mode == 'test':
             filename = "/data/nist17_data/test_nist17/test.json"
-            with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+            with open(path + filename, 'r') as fp:  
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                 self.data.append(target_data)
         
         elif mode == 'all':
             for i in tqdm(range(data_end)):
                 begin, end = i * 1000 + 1, (i + 1) * 1000
                 filename = "/data/nist17_data/all_neims_uni/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+                with open(path + filename, 'r') as fp:  
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                     self.data.append(target_data)
         
-        # elif mode == 'all_predict':
-        #     with open(path + "/data/B_all_predict_ms.json", 'r') as fp:
-        #         file_data = json.load(fp)
-        #         for tmp_data in file_data:
-        #             target_data = {'smiles': 'none',   # [smiles_ids, smiles_mask]  2维
-        #                             'peaks': list(pre_processing_ms(tmp_data['peaks'], config_json))}  # [ms_tensor, ms_mask]  2维
-        #             self.data.append(target_data)
-
-        # if flag:
-        #     begin, end = i * 1000 + 1, (i + 1) * 1000
-        #     filename = "/" + str(begin) + "-" + str(end) + ".json"
-        #     with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
-        #         file_data = json.load(fp)
-        #         for tmp_data in file_data:
-        #             target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-        #                             'peaks': pre_processing_ms(tmp_data['peaks'])}  # [ms_tensor, ms_mask]  2维
-                    # self.data.append(target_data)
-        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data)))  #
+        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data)))  
 
     def __getitem__(self, index):
         # Returns one sample at a time
-        return self.data[index]["smiles"], self.data[index]["peaks"]  # data是列表，存着字典
+        return self.data[index]["smiles"], self.data[index]["peaks"]
 
     def __len__(self):
         # Return the size of the dataset
@@ -104,65 +86,46 @@ class NIST23Dataset(Dataset):
             for i in tqdm(range(data_end)):
                 begin, end = i * 5000 + 1, (i + 1) * 5000
                 filename = "/data/nist23_data/train23/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+                with open(path + filename, 'r') as fp:  
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                     self.data.append(target_data)
-            # # 从self.data里随机取25000个数据
-            # self.data = random.sample(self.data, 25000)
             
         elif mode == 'dev':
             filename = "/data/nist23_data/dev23/dev.json"
-            with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+            with open(path + filename, 'r') as fp:  
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                 self.data.append(target_data)
-            # flag = (i % 10 == 8)
+
         elif mode == 'test':
             filename = "/data/nist23_data/test23/test.json"
-            with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+            with open(path + filename, 'r') as fp:  
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
                 self.data.append(target_data)
         
         elif mode == 'all':
             for i in tqdm(range(data_end)):
                 begin, end = i * 5000 + 1, (i + 1) * 5000
                 filename = "/data/nist23_data/mainlib23_right_smiles_uni/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
+                with open(path + filename, 'r') as fp:  
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  2维
-                    self.data.append(target_data)
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask] 
 
-        # elif mode == 'all_predict':
-        #     with open(path + "/data/B_all_predict_ms.json", 'r') as fp:
-        #         file_data = json.load(fp)
-        #         for tmp_data in file_data:
-        #             target_data = {'smiles': 'none',   # [smiles_ids, smiles_mask]  2维
-        #                             'peaks': list(pre_processing_ms(tmp_data['peaks'], config_json))}  # [ms_tensor, ms_mask]  2维
-        #             self.data.append(target_data)
-        # if flag:
-        #     begin, end = i * 1000 + 1, (i + 1) * 1000
-        #     filename = "/" + str(begin) + "-" + str(end) + ".json"
-        #     with open(path + filename, 'r') as fp:  # path在main.py中source_data_path赋值 : data/all_data
-        #         file_data = json.load(fp)
-        #         for tmp_data in file_data:
-        #             target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  2维
-        #                             'peaks': pre_processing_ms(tmp_data['peaks'])}  # [ms_tensor, ms_mask]  2维
-                    # self.data.append(target_data)
-        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data)))  #
+        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data))) 
 
     def __getitem__(self, index):
         # Returns one sample at a time
-        return self.data[index]["smiles"], self.data[index]["peaks"]  # data是列表，存着字典
+        return self.data[index]["smiles"], self.data[index]["peaks"]
 
     def __len__(self):
         # Return the size of the dataset
@@ -207,30 +170,15 @@ def load_analysis_data(analysis_data, config_json):
     
     return smiles_ids, smiles_mask, mz, intensity, ms_mask
 
-
-# def pre_processing_smi(smiles_str, tokenizer, config_json):
-#     smiles_str = Chem.MolToSmiles(Chem.MolFromSmiles(smiles_str))
-#     encode_dict = tokenizer.encode_plus(
-#         text=smiles_str,  
-#         max_length=config_json["dataset_config"]["smiles_maxlen"], 
-#         padding='max_length', 
-#         truncation=True)  
-#     smiles_ids = torch.from_numpy(
-#         np.array(encode_dict['input_ids'])).view(1, -1)
-#     smiles_mask = torch.from_numpy(
-#         np.array(encode_dict['attention_mask'])).view(1, -1)
-#     return [smiles_ids, smiles_mask]
-
 def pre_processing_smi(smiles_str, tokenizer, config_json):
-    if isinstance(smiles_str, str):  # 判断smiles_str是否为字符串类型
+    if isinstance(smiles_str, str): 
         encode_dict = tokenizer(
-            text=smiles_str,  # 输入的smiles字符串
-            max_length=config_json["dataset_config"]["smiles_maxlen"],  # 300
-            padding='max_length',  # 300
-            truncation=True)  # 超过最大长度截断处理
+            text=smiles_str, 
+            max_length=config_json["dataset_config"]["smiles_maxlen"],
+            padding='max_length', 
+            truncation=True)
         smiles_ids = torch.from_numpy(
-            np.array(encode_dict['input_ids'])).view(
-            1, -1)  # smiles ----> tensor
+            np.array(encode_dict['input_ids'])).view(1, -1)  # smiles ----> tensor
         smiles_mask = torch.from_numpy(
             np.array(encode_dict['attention_mask'])).view(1, -1)
     else:
@@ -252,14 +200,13 @@ def pre_processing_smi(smiles_str, tokenizer, config_json):
     return [smiles_ids, smiles_mask]
 
 def pre_processing_smi_with_canonical(smiles_str, tokenizer, config_json):
-    if isinstance(smiles_str, str):  # 判断smiles_str是否为字符串类型
-        # 使用rdkit将smiles字符串转换为标准格式
+    if isinstance(smiles_str, str):
         smiles_str = Chem.MolToSmiles(Chem.MolFromSmiles(smiles_str))
         encode_dict = tokenizer(
-            text=smiles_str,  # 输入的smiles字符串
-            max_length=config_json["dataset_config"]["smiles_maxlen"],  # 300
-            padding='max_length',  # 300
-            truncation=True)  # 超过最大长度截断处理
+            text=smiles_str, 
+            max_length=config_json["dataset_config"]["smiles_maxlen"],
+            padding='max_length', 
+            truncation=True)
         smiles_ids = torch.from_numpy(
             np.array(encode_dict['input_ids'])).view(1, -1)  # smiles ----> tensor
         smiles_mask = torch.from_numpy(
