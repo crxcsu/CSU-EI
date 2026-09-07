@@ -1,11 +1,13 @@
 # CSU-EI
 <p align="center">
-  <img src="figures/CSUEI.png" width="300">
+  <img src="figures/CSUEI.png" width="100%">
 </p>
 
 This is the code repo for the paper *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*. We developed a method named Contrastively Spectral-structural Unification for Electron Ionization mass spectrometry (CSU-EI)
 
-### 🔍 Overview
+---
+
+## 1. Overview
 CSU-EI is a contrastive learning framework that unifies EI-MS spectra and molecular structures for cross-modal retrieval. It overcomes traditional spectral library constraints, delivers high-accuracy compound identification, and recognizes novel compounds and similar isomers, offering a new paradigm for EI-MS analysis.
 
 Highlights:
@@ -15,11 +17,7 @@ Highlights:
 - 🔍 **Bidirectional Zero‑shot Retrieval**: CLIP‑inspired contrastive learning unifies cross‑modal representations, enabling zero‑shot spectrum‑structure retrieval and GC‑MS molecular localization.
 - 🌐 **Ultra-large Structural Library Support**: Equipped with a 100M molecular library and web deployment, enabling identification of library-absent compounds.
 
----
-
-
-
-## Environment Setup
+## 2. Environment Setup
 We recommend using [uv](https://docs.astral.sh/uv/) to manage the Python environment and packages.
 
 ```bash
@@ -38,8 +36,7 @@ source "$ENV_NAME/bin/activate"
 uv sync --python 3.14 --active
 ```
 
-
-## Codebase guide
+## 3. Codebase guide
 The repository is organized around model training, mass-spectrometry data processing, and retrieval evaluation:
 
 ```text
@@ -78,6 +75,19 @@ CSU-EI/
 - `utils/NetCDF.py`: NetCDF/CDF mass-spectrometry file reading utilities.
 - `utils/tools.py`: Reproducibility, experiment-directory, checkpoint, and result-conversion utilities.
 
-## Information of maintainers
+## 4. Web Server
+
+
+
+
+
+## 5. 100M Database
+
+
+
+
+
+
+## 6. Information of maintainers
 - zmzhang@csu.edu.cn
 - 262303055@csu.edn.cn
