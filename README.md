@@ -3,9 +3,9 @@
   <img src="figures/CSUEI.png" width="100%">
 </p>
 
-> Paper: *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*
+> **Paper**: *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*
 
-> Authors: Ruixi Chen, Miaomiao Li, Jia Long, Qiong Yang, Ting Xie, Shuqing Huang, Yufei Wang, Hongmei Lu, and Zhimin Zhang
+> **Authors**: Ruixi Chen, Miaomiao Li, Jia Long, Qiong Yang, Ting Xie, Shuqing Huang, Yufei Wang, Hongmei Lu, and Zhimin Zhang
 
 ---
 
