@@ -1,12 +1,25 @@
-<div style="text-align: center;">
-    <img src="logo.png" width="200px">
-</div>
-
-## CSU-EI
+# CSU-EI
+<p align="center">
+  <img src="figures/CSUEI.png" width="300">
+</p>
 
 This is the code repo for the paper *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*. We developed a method named Contrastively Spectral-structural Unification for Electron Ionization mass spectrometry (CSU-EI)
 
-### Package required:
+### 🔍 Overview
+CSU-EI is a contrastive learning framework that unifies EI-MS spectra and molecular structures for cross-modal retrieval. It overcomes traditional spectral library constraints, delivers high-accuracy compound identification, and recognizes novel compounds and similar isomers, offering a new paradigm for EI-MS analysis.
+
+Highlights:
+- 📊**Spectral Encoder**：Transformer architecture integrated with sinusoidal m/z positional encoding for spectral feature learning.
+- 🧬**Molecular Encoder**：RoBERTa‑based backbone adopts masked‑SMILES MLM pre‑training to capture intrinsic molecular structural patterns.
+- 🔗 **External Space Attention**：External space attention replaces fixed pooling to effectively bridge spectrum-structure modality gaps.
+- 🔍 **Bidirectional Zero‑shot Retrieval**: CLIP‑inspired contrastive learning unifies cross‑modal representations, enabling zero‑shot spectrum‑structure retrieval and GC‑MS molecular localization.
+- 🌐 **Ultra-large Structural Library Support**: Equipped with a 100M molecular library and web deployment, enabling identification of library-absent compounds.
+
+---
+
+
+
+## Environment Setup
 We recommend using [uv](https://docs.astral.sh/uv/) to manage the Python environment and packages.
 
 ```bash
@@ -25,14 +38,8 @@ source "$ENV_NAME/bin/activate"
 uv sync --python 3.14 --active
 ```
 
-## Interacting with CSU-EI
-
-In [`Interacting_with_CSUEI.ipynb`](Interacting_with_CSUEI.ipynb) file.
-
-Or [`https://huggingface.co/spaces`](https://huggingface.co/spaces)
 
 ## Codebase guide
-
 The repository is organized around model training, mass-spectrometry data processing, and retrieval evaluation:
 
 ```text
