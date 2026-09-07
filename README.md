@@ -3,7 +3,9 @@
   <img src="figures/CSUEI.png" width="100%">
 </p>
 
-This is the code repo for the paper *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*. We developed a method named Contrastively Spectral-structural Unification for Electron Ionization mass spectrometry (CSU-EI)
+> Paper: *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*
+
+> Authors: Ruixi Chen, Miaomiao Li, Jia Long, Qiong Yang, Ting Xie, Shuqing Huang, Yufei Wang, Hongmei Lu, and Zhimin Zhang
 
 ---
 
