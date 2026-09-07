@@ -6,15 +6,24 @@
 
 This is the code repo for the paper *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*. We developed a method named Contrastively Spectral-structural Unification for Electron Ionization mass spectrometry (CSU-EI)
 
-### Package required: 
-We recommend to use [conda](https://conda.io/docs/user-guide/install/download.html). 
+### Package required:
+We recommend using [uv](https://docs.astral.sh/uv/) to manage the Python environment and packages.
 
-By using the [`requirements/environment.yaml`](requirements/environment.yaml)file, it will install all the required packages.
+```bash
+git clone https://github.com/CSU-RuixiChen/CSU-EI.git
+cd CSU-EI
 
-    git clone https://github.com/csu-jialong/CSU-EI.git
-    cd CSU-EI
-    conda env create -f requirements/environment.yaml
-    conda activate csu-ei
+# Install uv (restart the shell or reload PATH if uv is not available immediately)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Change this value to use a different virtual environment directory.
+ENV_NAME=.venv
+uv venv "$ENV_NAME" --python 3.14
+source "$ENV_NAME/bin/activate"
+
+# Create the environment and install the dependencies from pyproject.toml.
+uv sync --python 3.14 --active
+```
 
 ## Interacting with CSU-EI
 
@@ -23,34 +32,45 @@ In [`Interacting_with_CSUEI.ipynb`](Interacting_with_CSUEI.ipynb) file.
 Or [`https://huggingface.co/spaces`](https://huggingface.co/spaces)
 
 ## Codebase guide
-configs folder:
-- `config.json`: model_config, dataset_config, training_config
 
-data folder:
-- `7_test`: 7 extra test set molecules
-- `example_smiles_db`: 110 molecules incuding 10 extra test molecules
-- `extra_10_test`: 10 extra test set molecules
-  
-fig folder: Some visualization pictures
+The repository is organized around model training, mass-spectrometry data processing, and retrieval evaluation:
 
-loss_function: loss function we used in training stage
+```text
+CSU-EI/
+├── analyzer/
+│   ├── Interacting_with_CSUEI.ipynb
+│   └── core.py
+├── configs/
+│   └── config.json
+├── data_provider/
+│   └── dataset.py
+├── exp/
+│   ├── exp_CSUEI.py
+│   └── nt_xent_loss.py
+├── model/
+│   ├── tokenizer-smiles-roberta/
+│   │   ├── merges.txt
+│   │   └── vocab.json
+│   ├── CSU_EI.py
+│   └── tokenizer.py
+├── utils/
+│   ├── NetCDF.py
+│   └── tools.py
+└── main.py
+```
 
-model folder: 
-- `tokenizer-smiles-roberta`: dict for tokenizer
-- `CSU-EI.py`: model logic
-- `tokenizer.py`: RobertaTokenizer
-
-model_weight: CSU-EI model weights file
-
-requirements:
-- `environment.yaml`: requied packages
-
-utils:
-- `data_preprocessing.py`: function for data preprocessing
-- `plot_eims.py`: plot EI-MS spectra
-- `NetCDF.py`: read .cdf files
-
+- `main.py`: Main entry point for model training.
+- `analyzer/`: Retrieval evaluation, top-k analysis, and the example interaction notebook.
+- `configs/config.json`: Device, dataset, model, and training configuration.
+- `data_provider/dataset.py`: NIST mass-spectrometry dataset loading and preprocessing.
+- `exp/exp_CSUEI.py`: Training workflow, experiment setup, evaluation, and distributed training.
+- `exp/nt_xent_loss.py`: NT-Xent contrastive loss used during training.
+- `model/CSU_EI.py`: CSU-EI neural network with SMILES and mass-spectrum encoders.
+- `model/tokenizer.py`: SMILES tokenizer construction.
+- `model/tokenizer-smiles-roberta/`: Vocabulary and merge files for the SMILES RoBERTa tokenizer.
+- `utils/NetCDF.py`: NetCDF/CDF mass-spectrometry file reading utilities.
+- `utils/tools.py`: Reproducibility, experiment-directory, checkpoint, and result-conversion utilities.
 
 ## Information of maintainers
 - zmzhang@csu.edu.cn
-- 232311034@csu.edn.cn
+- 262303055@csu.edn.cn
