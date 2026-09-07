@@ -14,7 +14,7 @@ CSU-EI is a contrastive learning framework that unifies EI-MS spectra and molecu
 
 Highlights:
 - 📊**Spectral Encoder**：Transformer architecture integrated with sinusoidal m/z positional encoding for spectral feature learning.
-- <span style="font-size:2em;vertical-align:-0.15em">⌬</span> **Molecular Encoder**：RoBERTa‑based backbone adopts masked‑SMILES MLM pre‑training to capture intrinsic molecular structural patterns.
+- <span style="font-size:2em;vertical-align:-0.15em">⌬</span> **Stucture Encoder**：RoBERTa‑based backbone adopts masked‑SMILES MLM pre‑training to capture intrinsic molecular structural patterns.
 - 🔗 **External Space Attention**：External space attention replaces fixed pooling to effectively bridge spectrum-structure modality gaps.
 - 🔍 **Bidirectional Zero‑shot Retrieval**: CLIP‑inspired contrastive learning unifies cross‑modal representations, enabling zero‑shot spectrum‑structure retrieval and GC‑MS molecular localization.
 - 🌐 **Ultra-large Structural Library Support**: Equipped with a 100M molecular library and web deployment, enabling identification of library-absent compounds.
