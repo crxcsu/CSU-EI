@@ -59,6 +59,11 @@ CSU-EI/
 │   │   └── vocab.json
 │   ├── CSU_EI.py
 │   └── tokenizer.py
+├── smiles_pretrain/
+│   ├── mlm_configs/
+│   ├── mlm_results/
+│   ├── mlm_main.py
+│   └── smiles_mlm.py
 ├── utils/
 │   ├── NetCDF.py
 │   └── tools.py
@@ -74,6 +79,11 @@ CSU-EI/
 - `model/CSU_EI.py`: CSU-EI neural network with SMILES and mass-spectrum encoders.
 - `model/tokenizer.py`: SMILES tokenizer construction.
 - `model/tokenizer-smiles-roberta/`: Vocabulary and merge files for the SMILES RoBERTa tokenizer.
+- `smiles_pretrain/`: SMILES masked-language-model pre-training code, configurations, and results.
+- `smiles_pretrain/mlm_configs/`: Configuration files for SMILES masked-language-model pre-training.
+- `smiles_pretrain/mlm_results/`: Checkpoints and output files generated during SMILES MLM pre-training.
+- `smiles_pretrain/mlm_main.py`: Main entry point for SMILES MLM pre-training.
+- `smiles_pretrain/smiles_mlm.py`: SMILES masked-language-model definition and training logic.
 - `utils/NetCDF.py`: NetCDF/CDF mass-spectrometry file reading utilities.
 - `utils/tools.py`: Reproducibility, experiment-directory, checkpoint, and result-conversion utilities.
 
