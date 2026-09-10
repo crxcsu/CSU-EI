@@ -77,19 +77,15 @@ CSU-EI/
 - `utils/NetCDF.py`: NetCDF/CDF mass-spectrometry file reading utilities.
 - `utils/tools.py`: Reproducibility, experiment-directory, checkpoint, and result-conversion utilities.
 
-## 4. Web Server
+## 4. CSU-EI Web Server
 
+We provide an online **CSU-EI Web Server** that allows users to:
+- 🔍 **Spectrum-to-molecule search**：Retrieve candidate molecules from a query EI mass spectrum against a **100M molecular library**, with optional filtering by mass ± tolerance or molecular formula.
+- 🧮 **Cosine similarity**：Compute the similarity score between a SMILES and an EI mass spectrum via L2-normalized CSU-EI encoders.
+- 📍 **Molecule localization**：Map a SMILES list onto an acquired GC-MS `.cdf` file, output as a similarity heatmap and CSV report.
+- 🌐 **Online demo**：Try the web server on Hugging Face Spaces at [CSUEI\_gradio](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio).
+- 💾 **Database**：Download the pre-built libraries, including the **100M molecular library** (`CSUEI_100M+17mol`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
 
-
-
-
-## 5. 100M Database
-
-
-
-
-
-
-## 6. Information of maintainers
+## 5. Information of maintainers
 - zmzhang@csu.edu.cn
 - 262303055@csu.edn.cn
