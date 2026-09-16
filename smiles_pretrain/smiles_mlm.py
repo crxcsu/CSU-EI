@@ -176,10 +176,10 @@ class NISTMLMDataset(Dataset):
 
     def mask_tokens(self, inputs, mlm_probability, special_tokens_mask, prob_replace_mask, prob_replace_rand):
         labels = inputs.clone()
-        # 生成一个全为0.15 的矩阵，维度和inputs的大小一样
+        # Generate a matrix filled with 0.15, with the same dimensions as the inputs.
         probability_matrix = torch.full(labels.shape, mlm_probability)
-        # 这里的spcial_tokens指的是cls，sep,pad等，special_tokens_mask的维度和inputs一样，
-        # 特殊token的位置是true，其他位置是false
+        # Here, "spcial_tokens" refers to "cls", "sep", "pad", etc. The dimension of "special_tokens_mask" is the same as that of "inputs".
+        # The position of the special token is true, while the positions of the others are false.
         if special_tokens_mask is None:
             special_tokens_mask = [
                 self.tokenizer.get_special_tokens_mask(val, already_has_special_tokens=True) for val in labels.tolist()
@@ -187,13 +187,12 @@ class NISTMLMDataset(Dataset):
             special_tokens_mask = torch.tensor(special_tokens_mask, dtype=torch.bool)
         else:
             special_tokens_mask = special_tokens_mask.bool()
-        # masked_fill_函数的作用是会根据special_tokens_mask中true的位置，将probability_matrix中对于的位置置为0
-        # 前面special_tokens_mask已经将cls等特殊字符的位置置为true,也就是通过将probability_matrix中特殊字符的位置置0，从而
-        # 不会mask掉特殊字符。
+        # The function of masked_fill_ is to set the values at the positions indicated by true in the special_tokens_mask to 0 in the probability_matrix.
+        # The special_tokens_mask has already set the positions of special characters such as "cls" to true. That is, by setting the positions of special characters in the probability_matrix to 0, the special characters will not be masked.
 
         probability_matrix.masked_fill_(special_tokens_mask, value=0.0)
-        # Bert是将句子中15%的词随机mask掉，也就是每个词有15%的概率被mask掉（1），有85%的概率不被mask掉（0），
-        # 因此可以建模为伯努利分布，参数p=0.15，然后通过bernoulli函数生成一个mask矩阵，维度和inputs一样，
+        # Bert randomly masks 15% of the words in a sentence. That is, each word has a 15% chance of being masked (1) and an 85% chance of not being masked (0).
+        # Therefore, it can be modeled as a Bernoulli distribution with parameter p = 0.15. Then, a mask matrix is generated using the Bernoulli function, with the same dimensions as the inputs.
         masked_indices = torch.bernoulli(probability_matrix).bool()
 
         labels[~masked_indices] = -100  # We only compute loss on masked tokens
