@@ -290,7 +290,7 @@ class SinusoidalEmbedder(nn.Module):
         mz_embed = self.mz_embed(result)
         x = torch.cat([intensity, mz_embed], dim=2)  # tensor(B, 100,768) ---> (B, 100, 769)
         output = self.ff(x)
-        return output, ms_mask  # output (1, 101, 768)
+        return output, ms_mask  # output (1, 100, 768)
 
 
 class MSProjection(nn.Module):
