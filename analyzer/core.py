@@ -504,15 +504,13 @@ def plot_distance_curve(distance_record_csv_path, fig_save_path):
     df = pd.read_csv(distance_record_csv_path)
     epoch_list = df['epoch'].tolist()
     train_distance_list = df['train_distance'].tolist()
-    
-    fig, ax1 = plt.subplots(figsize=(8, 8))
-    plt.rcParams['font.size'] = 50
-    
+    train_similarity_list = [1.0 - d for d in train_distance_list]
+    fig, ax1 = plt.subplots(figsize=(6, 5))
     ax1.set_xlabel('Epoch', fontsize=16)
-    ax1.set_ylabel('Cosine Distance', fontsize=16)
-    line1, = ax1.plot(epoch_list, train_distance_list, color='red', linewidth=1.2, label='Train Cosine Distance')
+    ax1.set_ylabel('Cosine Similarity', fontsize=16)
+    line1, = ax1.plot(epoch_list, train_similarity_list, color='red', linestyle='--',
+                      linewidth=1.2, label='Train Cosine Similarity')
     ax1.tick_params(axis='both', labelsize=13)
-
     lines = [line1]
     labels = [l.get_label() for l in lines]
     ax1.legend(lines, labels, loc='right', fontsize=14)
