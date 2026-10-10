@@ -70,6 +70,109 @@ class NIST17Dataset(Dataset):
         return len(self.data)
 
 
+# class NIST23Dataset(Dataset):
+#     def __init__(self,
+#                  path,
+#                  config_json,
+#                  data_end=70,
+#                  mode='train'):
+#         self.mode = mode
+#         self.data = []
+#         self.tokenizer = build_tokenizer(config_json['roberta_tokenizer_path'])
+#         self.config_json = config_json
+#         self.device = self.config_json['device']
+
+#         if mode == 'train':
+#             for i in tqdm(range(data_end)):
+#                 begin, end = i * 5000 + 1, (i + 1) * 5000
+#                 filename = "/data/nist23_data/train23/" + str(begin) + "-" + str(end) + ".json"
+#                 with open(path + filename, 'r') as fp:  
+#                     file_data = json.load(fp)
+#                 for tmp_data in file_data:
+#                     target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+#                                     'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+#                     self.data.append(target_data)
+            
+#         elif mode == 'dev':
+#             filename = "/data/nist23_data/dev23/dev.json"
+#             with open(path + filename, 'r') as fp:  
+#                 file_data = json.load(fp)
+#             for tmp_data in file_data:
+#                 target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+#                                 'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+#                 self.data.append(target_data)
+
+#         elif mode == 'test':
+#             filename = "/data/nist23_data/test23/test.json"
+#             with open(path + filename, 'r') as fp:  
+#                 file_data = json.load(fp)
+#             for tmp_data in file_data:
+#                 target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+#                                 'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+#                 self.data.append(target_data)
+        
+#         elif mode == 'all':
+#             for i in tqdm(range(data_end)):
+#                 begin, end = i * 5000 + 1, (i + 1) * 5000
+#                 filename = "/data/nist23_data/mainlib23_right_smiles_uni/" + str(begin) + "-" + str(end) + ".json"
+#                 with open(path + filename, 'r') as fp:  
+#                     file_data = json.load(fp)
+#                 for tmp_data in file_data:
+#                     target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
+#                                     'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]
+#                     self.data.append(target_data) 
+
+#         print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data))) 
+
+#     def __getitem__(self, index):
+#         # Returns one sample at a time
+#         return self.data[index]["smiles"], self.data[index]["peaks"]
+
+#     def __len__(self):
+#         # Return the size of the dataset
+#         return len(self.data)
+
+
+# ---------------------------------------------------------------------------
+# Binned representation (DeepNovo-style fixed-length intensity vector) --
+# used ONLY by the cnn_mlp branch.
+#   - discretize the m/z axis into num_bins bins, accumulate intensity per bin
+#   - position implicitly encodes m/z, so 1D conv slides over m/z
+#   - same return shape as pre_processing_ms: [mz, intensity, ms_mask], each [1, num_bins]
+# ---------------------------------------------------------------------------
+def pre_processing_ms_binned(peaks_data, config_json):
+    if isinstance(peaks_data, str):
+        peaks_data = ast.literal_eval(peaks_data)
+
+    ds_cfg = config_json["dataset_config"]
+    num_bins = int(ds_cfg.get("ms_num_bins", 1500))        # fixed length after binning
+    max_mz = float(ds_cfg.get("ms_max_mz", 1500.0))        # upper bound of m/z axis
+    bin_width = max_mz / num_bins
+
+    binned = torch.zeros(num_bins)
+    if len(peaks_data) > 0:
+        peaks_tensor = torch.tensor(peaks_data, dtype=torch.float)  # [N, 2] -> [mz, intensity]
+        mz = peaks_tensor[:, 0]
+        inten = peaks_tensor[:, 1]
+        # which bin each peak lands in (clamp keeps out-of-range peaks in the last bin)
+        bin_idx = torch.clamp((mz / bin_width).long(), 0, num_bins - 1)
+        binned.scatter_add_(0, bin_idx, inten)
+
+    # per-spectrum normalization to [0,1] (consistent with the peak-list version)
+    if binned.max() > 0:
+        binned = binned / binned.max()
+
+    intensity = binned.view(1, -1)
+    # mz holds each bin's center mass (conv only uses intensity; kept for a uniform interface)
+    mz_centers = (torch.arange(num_bins, dtype=torch.float) + 0.5) * bin_width
+    mz_ph = mz_centers.view(1, -1)
+    ms_mask = torch.ones(1, num_bins)                       # binned spectra have no padding
+    return [mz_ph, intensity, ms_mask]
+
+
+# ---------------------------------------------------------------------------
+# Dataset: pick MS representation based on ms_backbone_type
+# ---------------------------------------------------------------------------
 class NIST23Dataset(Dataset):
     def __init__(self,
                  path,
@@ -82,53 +185,58 @@ class NIST23Dataset(Dataset):
         self.config_json = config_json
         self.device = self.config_json['device']
 
+        # binned only for cnn_mlp; peak-list otherwise
+        ms_backbone_type = config_json['model_config'].get('ms_backbone_type', 'transformer')
+        self.preprocess_ms = (pre_processing_ms_binned
+                              if ms_backbone_type == 'cnn_mlp'
+                              else pre_processing_ms)
+
         if mode == 'train':
             for i in tqdm(range(data_end)):
                 begin, end = i * 5000 + 1, (i + 1) * 5000
                 filename = "/data/nist23_data/train23/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  
+                with open(path + filename, 'r') as fp:
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),
+                                   'peaks': self.preprocess_ms(tmp_data['peaks'], config_json)}
                     self.data.append(target_data)
-            
+
         elif mode == 'dev':
             filename = "/data/nist23_data/dev23/dev.json"
-            with open(path + filename, 'r') as fp:  
+            with open(path + filename, 'r') as fp:
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),
+                               'peaks': self.preprocess_ms(tmp_data['peaks'], config_json)}
                 self.data.append(target_data)
 
         elif mode == 'test':
             filename = "/data/nist23_data/test23/test.json"
-            with open(path + filename, 'r') as fp:  
+            with open(path + filename, 'r') as fp:
                 file_data = json.load(fp)
             for tmp_data in file_data:
-                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
-                                'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask]  
+                target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),
+                               'peaks': self.preprocess_ms(tmp_data['peaks'], config_json)}
                 self.data.append(target_data)
-        
+
         elif mode == 'all':
             for i in tqdm(range(data_end)):
                 begin, end = i * 5000 + 1, (i + 1) * 5000
                 filename = "/data/nist23_data/mainlib23_right_smiles_uni/" + str(begin) + "-" + str(end) + ".json"
-                with open(path + filename, 'r') as fp:  
+                with open(path + filename, 'r') as fp:
                     file_data = json.load(fp)
                 for tmp_data in file_data:
-                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),   # [smiles_ids, smiles_mask]  
-                                    'peaks': pre_processing_ms(tmp_data['peaks'], config_json)}  # [ms_tensor, ms_mask] 
+                    target_data = {'smiles': pre_processing_smi(tmp_data['smiles'], self.tokenizer, config_json),
+                                   'peaks': self.preprocess_ms(tmp_data['peaks'], config_json)}
+                    self.data.append(target_data)
 
-        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data))) 
+        print('Finished reading the {} set of NIST Dataset ({} samples found)'.format(mode, len(self.data)))
 
     def __getitem__(self, index):
-        # Returns one sample at a time
         return self.data[index]["smiles"], self.data[index]["peaks"]
 
     def __len__(self):
-        # Return the size of the dataset
         return len(self.data)
 
 
@@ -233,29 +341,26 @@ def pre_processing_smi_with_canonical(smiles_str, tokenizer, config_json):
 def pre_processing_ms(peaks_data, config_json):
     if isinstance(peaks_data, str):
         peaks_data = ast.literal_eval(peaks_data)
-    num_peaks = config_json["dataset_config"]["ms_maxpeaks"]  # 100
+    num_peaks = config_json["dataset_config"]["ms_maxpeaks"]
     if len(peaks_data) <= num_peaks:
-        ms_mask = torch.cat((torch.ones(len(peaks_data)), torch.zeros(num_peaks - len(peaks_data)))).view(1, -1) # 补零
+        ms_mask = torch.cat((torch.ones(len(peaks_data)), torch.zeros(num_peaks - len(peaks_data)))).view(1, -1)
         ms_tensor = torch.tensor(peaks_data).transpose(0, 1)
         mz, i = ms_tensor[0], ms_tensor[1]
         i = i / i.max()
-        # mz 转为int类型
-        mz = mz.int() # 转为int类型，不一样的地方
+        mz = mz.int() 
         ms_tensor = torch.stack([mz, i])
-        ms_tensor = torch.cat((ms_tensor, torch.zeros(2, num_peaks - len(peaks_data))), dim=1)  # 补零
+        ms_tensor = torch.cat((ms_tensor, torch.zeros(2, num_peaks - len(peaks_data))), dim=1)
         mz, i = ms_tensor[0].view(1, -1), ms_tensor[1].view(1, -1)
-    # 长度大于100，取i排行前100的峰
     elif len(peaks_data) > num_peaks:
         ms_mask = torch.ones(num_peaks).view(1, -1)
         peaks_data.sort(key=lambda x: x[1], reverse=True)
-        # 取前100个峰再按m/z升序排序
         peaks_data = peaks_data[:num_peaks]
-        peaks_data.sort(key=lambda x: x[0], reverse=False) # 按照m/z升序排列
+        peaks_data.sort(key=lambda x: x[0], reverse=False)
         ms_tensor = torch.tensor(peaks_data).transpose(0, 1)
         mz, i = ms_tensor[0], ms_tensor[1]
         i = i / i.max()
-        mz = mz.int() # 转为int类型，不一样的地方
-        ms_tensor = torch.stack([mz, i]) # ms_tensor.shape = torch.Size([2, 100])
+        mz = mz.int()
+        ms_tensor = torch.stack([mz, i])
         mz, i = ms_tensor[0].view(1, -1), ms_tensor[1].view(1, -1)
 
     return [mz, i, ms_mask]
@@ -279,24 +384,15 @@ def prep_dataloader(nist, src_data_path, config_json, mode, shuffle=True, drop_l
 
 
 def process_ms_spectra_for_wcs(ms, M_max = 1000):
-    """
-    将输入ms[[m/z, i],[m/z, i],...]转换为tensor[[m/z,..], [intensity,..]],再使用wcs加权得到ms_tensor
-    """
     if isinstance(ms, str):
         ms = ast.literal_eval(ms)
-    # 1. 将ms转换为tensor[[m/z,..], [intensity,..]]
-    # M_max = 1000 最大的m/z值
-    ms = torch.tensor(ms, dtype=torch.float32).T # 形状为[2, n] 
-    # 2. 将m/z 和 iintensity按照WCS加权
+    ms = torch.tensor(ms, dtype=torch.float32).T 
     mz, intensity = ms[0], ms[1]
-    intensity = intensity / intensity.max() # 归一化
-    ms_ = mz * torch.sqrt(intensity) # WCS加权
-    # 3.创建一个维度为M_max的tensor，初始化为0
+    intensity = intensity / intensity.max() 
+    ms_ = mz * torch.sqrt(intensity) 
     ms_tensor = torch.zeros(M_max).float()
-    # 用加权后的值填充
     ms_indices = (mz-1).long()
     ms_tensor[ms_indices] = ms_
-    # nan to 0
     ms_tensor[torch.isnan(ms_tensor)] = 0
     return ms_tensor
 

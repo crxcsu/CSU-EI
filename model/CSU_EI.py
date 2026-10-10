@@ -241,23 +241,43 @@ class Block(nn.Module):
         return x, ms_mask
 
 
+# class MSEmbedder(nn.Module):
+#     def __init__(self, max_mz, n_embed, dropout):
+#         super(MSEmbedder, self).__init__()
+#         self.mz_embed = nn.Embedding(max_mz, n_embed, padding_idx=0)  
+
+#         self.ff = nn.Sequential(nn.Linear(n_embed + 1, n_embed),
+#                                 nn.ReLU(inplace=True),                           
+#                                 nn.Linear(n_embed, n_embed),
+#                                 nn.Dropout(dropout))
+#         self.d_model = n_embed
+
+#     def forward(self, input):
+#         mz, intensity, ms_mask = input[0].squeeze(1), input[1].squeeze(1).unsqueeze(-1), input[2].squeeze(1)  # mz (B, 100) i (B, 100) ms_mask (B, 100)
+#         mz_embed = self.mz_embed(mz.long()) # (B, 100, 768)
+#         x = torch.cat([intensity, mz_embed], dim=2)  # tensor(B, 100,768) ---> (B, 100, 769)
+#         output = self.ff(x)
+#         return output, ms_mask  # output (1, 101, 768)
+
+
 class MSEmbedder(nn.Module):
+    """
+    PointNovo‑style earliest transformer‑ms embedding, modified based on original MSEmbedder class signature.
+    Note: m/z must be pre‑binned to integer bin index in dataloader.
+    """
     def __init__(self, max_mz, n_embed, dropout):
         super(MSEmbedder, self).__init__()
-        self.mz_embed = nn.Embedding(max_mz, n_embed, padding_idx=0)  
-
-        self.ff = nn.Sequential(nn.Linear(n_embed + 1, n_embed),
-                                nn.ReLU(inplace=True),                           
-                                nn.Linear(n_embed, n_embed),
-                                nn.Dropout(dropout))
-        self.d_model = n_embed
+        self.mz_embed = nn.Embedding(max_mz, n_embed, padding_idx=0)
+        self.intensity_proj = nn.Linear(1, n_embed)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, input):
-        mz, intensity, ms_mask = input[0].squeeze(1), input[1].squeeze(1).unsqueeze(-1), input[2].squeeze(1)  # mz (B, 100) i (B, 100) ms_mask (B, 100)
-        mz_embed = self.mz_embed(mz.long()) # (B, 100, 768)
-        x = torch.cat([intensity, mz_embed], dim=2)  # tensor(B, 100,768) ---> (B, 100, 769)
-        output = self.ff(x)
-        return output, ms_mask  # output (1, 101, 768)
+        mz, intensity, ms_mask = input[0].squeeze(1), input[1].squeeze(1).unsqueeze(-1), input[2].squeeze(1)
+        mz_embed = self.mz_embed(mz.long())
+        int_embed = self.intensity_proj(intensity)
+        x = mz_embed + int_embed
+        output = self.dropout(x)
+        return output, ms_mask
 
 
 # sinusoidal embedder

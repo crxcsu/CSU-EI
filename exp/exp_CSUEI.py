@@ -72,6 +72,8 @@ def main(main_path, seed=2023, config_file="config.json"):
         train_DDP(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
     
     auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"))
+    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"),
+                   dev_path="data/nist23_data/dev23/dev_index_list.json")
     
     with open(os.path.join(main_path, 'configs', f"config_{time_stamp}.json"), 'w') as f:
         json.dump(config_json, f, indent=True)

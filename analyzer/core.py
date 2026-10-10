@@ -203,7 +203,16 @@ def auto_eval_topk(config_path, dev_path=None,
             formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json'
             test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
     else:
-        test_index_list_path = dev_path
+        test_index_list_path = os.path.join(MAIN_PATH, dev_path)
+        if config_json["dataset_config"]["nist"] == 23:
+            mw_list_path='data/nist23_data/test23/uni_mainlib23_mw_list.json'     
+            formula_index_path='data/nist23_data/test23/uni_mainlib23_formula_index_dict.json'
+            test_formula_list_path='data/nist23_data/test23/test_formula_list.json'   
+        elif config_json["dataset_config"]["nist"] == 17:
+            mw_list_path='data/nist17_data/test_nist17/uni_mainlib_mw_list.json'  
+            formula_index_path='data/nist17_data/test_nist17/uni_mainlib17_formula_index_dict.json'
+            test_formula_list_path='data/nist17_data/test_nist17/test_formula_list.json'
+
         
     model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
 
@@ -342,7 +351,7 @@ def auto_eval_topk(config_path, dev_path=None,
 
     if dev_path is None and config_json["dataset_config"]["nist"] == 23:
         # Save per-molecule ranking results
-        test_pd = pd.read_csv('data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv')
+        test_pd = pd.read_csv(os.path.join(MAIN_PATH, 'data/nist23_data/test23/test_smiles_with_classification_20260504_233859.csv'))
         test_pd['rank23'] = rank23  # Assign rank23 from evaluation
         test_pd = test_pd.drop_duplicates(subset=['smiles'], keep='first')  # Remove duplicate SMILES
         test_pd.to_csv(
