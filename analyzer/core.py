@@ -514,9 +514,9 @@ def plot_distance_curve(distance_record_csv_path, fig_save_path):
     epoch_list = df['epoch'].tolist()
     train_distance_list = df['train_distance'].tolist()
     train_similarity_list = [1.0 - d for d in train_distance_list]
-    fig, ax1 = plt.subplots(figsize=(6, 5))
-    ax1.set_xlabel('Epoch', fontsize=16)
-    ax1.set_ylabel('Cosine Similarity', fontsize=16)
+    fig, ax1 = plt.subplots(figsize=(5, 5))
+    ax1.set_xlabel('Epoch', fontsize=20)
+    ax1.set_ylabel('Cosine Similarity', fontsize=20)
     line1, = ax1.plot(epoch_list, train_similarity_list, color='red', linestyle='--',
                       linewidth=1.2, label='Train Cosine Similarity')
     ax1.tick_params(axis='both', labelsize=13)

@@ -1,4 +1,5 @@
 # CSU-EI
+
 <p align="center">
   <img src="figures/CSUEI.png" width="100%">
 </p>
@@ -10,9 +11,11 @@
 ---
 
 ## 1. Overview
+
 CSU-EI is a contrastive learning framework that unifies EI-MS spectra and molecular structures for cross-modal retrieval. It overcomes traditional spectral library constraints, delivers high-accuracy compound identification, and recognizes novel compounds and similar isomers, offering a new paradigm for EI-MS analysis.
 
 Highlights:
+
 - 📊 **Spectral Encoder**：Transformer architecture integrated with sinusoidal m/z positional encoding for spectral feature learning.
 - <span style="font-size:2em;vertical-align:-0.15em">⌬</span> **Structure Encoder**：RoBERTa‑based backbone adopts masked‑SMILES MLM pre‑training to capture intrinsic molecular structural patterns.
 - 🔗 **External Space Attention**：External space attention replaces fixed pooling to effectively bridge spectrum-structure modality gaps.
@@ -20,10 +23,11 @@ Highlights:
 - 🌐 **Ultra-large Structural Library Support**: Equipped with a 100M molecular library and web deployment, enabling identification of library-absent compounds.
 
 ## 2. Environment Setup
+
 We recommend using [uv](https://docs.astral.sh/uv/) to manage the Python environment and packages.
 
 ```bash
-git clone https://github.com/CSU-RuixiChen/CSU-EI.git
+git clone https://github.com/crxcsu/CSU-EI.git
 cd CSU-EI
 
 # Install uv (restart the shell or reload PATH if uv is not available immediately)
@@ -39,6 +43,7 @@ uv sync --python 3.14 --active
 ```
 
 ## 3. Codebase guide
+
 The repository is organized around model training, mass-spectrometry data processing, and retrieval evaluation:
 
 ```text
@@ -71,7 +76,9 @@ CSU-EI/
 ```
 
 - `main.py`: Main entry point for model training.
-- `analyzer/`: Retrieval evaluation, top-k analysis, and the example interaction notebook.
+- `analyzer/`: Retrieval evaluation, Top-k analysis, visualization, explainability, and the example interaction notebook.
+  - `core.py`: Loads checkpoints, encodes SMILES/EI-MS, computes cosine similarity, evaluates Recall@k, applies candidate filters, and saves analysis results.
+  - `Interacting_with_CSUEI.ipynb`: Covers optimization, ablation, UMAP, modality-gap analysis, Recall comparisons, chemical-class evaluation, similarity heatmaps, WCS comparison, token-peak explainability, cross-modal vector arithmetic, and GC-MS molecular localization.
 - `configs/config.json`: Device, dataset, model, and training configuration.
 - `data_provider/dataset.py`: NIST mass-spectrometry dataset loading and preprocessing.
 - `exp/exp_CSUEI.py`: Training workflow, experiment setup, evaluation, and distributed training.
@@ -90,12 +97,14 @@ CSU-EI/
 ## 4. CSU-EI Web Server
 
 We provide an online **CSU-EI Web Server** that allows users to:
+
 - 🔍 **Spectrum-to-molecule search**：Retrieve candidate molecules from a query EI mass spectrum against a **100M molecular library**, with optional filtering by mass ± tolerance or molecular formula.
 - 🧮 **Cosine similarity**：Compute the similarity score between a SMILES and an EI mass spectrum via L2-normalized CSU-EI encoders.
 - 📍 **Molecule localization**：Map a SMILES list onto an acquired GC-MS `.cdf` file, output as a similarity heatmap and CSV report.
 - 🌐 **Online demo**：Try the web server on Hugging Face Spaces at [CSUEI\_gradio](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio).
-- 💾 **Database**：Download the pre-built libraries, including the **100M molecular library** (`CSUEI_100M+17mol`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
+- 💾 **Database**：Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
 
 ## 5. Information of maintainers
+
 - zmzhang@csu.edu.cn
 - 262303055@csu.edn.cn
