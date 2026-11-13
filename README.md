@@ -1,7 +1,7 @@
 # CSU-EI
 
 <p align="center">
-  <img src="figures/CSUEI.png" width="100%">
+  <img src="figures/Overview_of_CSU-EI_3.emf" width="100%">
 </p>
 
 > **Paper**: *Contrastively Spectral-structural Unification for Electron–Ionization Mass Spectrometry*
