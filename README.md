@@ -9,11 +9,12 @@
 > **Authors**: Ruixi Chen, Miaomiao Li, Jia Long, Qiong Yang, Ting Xie, Shuqing Huang, Yufei Wang, Hongmei Lu, and Zhimin Zhang
 
 ---
+
 [![python_sup](https://img.shields.io/badge/python-3.14.6-black.svg?)](https://www.python.org/downloads/release/python-31012/)
 [![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-Demo-yellow.svg)](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio)
-[![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database)
+[![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database)
+[![Model](https://img.shields.io/badge/🧠%20Model-CSUEI-red)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/crxcsu/CSU-EI/blob/master/analyzer/Interacting_with_CSUEI_colab.ipynb)
-
 
 ## 1. Overview
 
@@ -84,6 +85,8 @@ CSU-EI/
 - `analyzer/`: Retrieval evaluation, Top-k analysis, visualization, explainability, and the example interaction notebook.
   - `core.py`: Loads checkpoints, encodes SMILES/EI-MS, computes cosine similarity, evaluates Recall@k, applies candidate filters, and saves analysis results.
   - `Interacting_with_CSUEI.ipynb`: Covers optimization, ablation, UMAP, modality-gap analysis, Recall comparisons, chemical-class evaluation, similarity heatmaps, WCS comparison, token-peak explainability, cross-modal vector arithmetic, and GC-MS molecular localization.
+  - `Interacting_with_CSUEI_colab.ipynb`: Interactive demo for cross-modal retrieval analysis and visualization, ready to run directly on Colab without local configuration. [Interacting_with_CSUEI_colab.ipynb](https://colab.research.google.com/github/crxcsu/CSU-EI/blob/master/analyzer/Interacting_with_CSUEI_colab.ipynb)
+
 - `configs/config.json`: Device, dataset, model, and training configuration.
 - `data_provider/dataset.py`: NIST mass-spectrometry dataset loading and preprocessing.
 - `exp/exp_CSUEI.py`: Training workflow, experiment setup, evaluation, and distributed training.
@@ -107,7 +110,8 @@ We provide an online **CSU-EI Web Server** that allows users to:
 - 🧮 **Cosine similarity**：Compute the similarity score between a SMILES and an EI mass spectrum via L2-normalized CSU-EI encoders.
 - 📍 **Molecule localization**：Map a SMILES list onto an acquired GC-MS `.cdf` file, output as a similarity heatmap and CSV report.
 - 🌐 **Online demo**：Try the web server on Hugging Face Spaces at [CSUEI\_gradio](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio).
-- 💾 **Database**：Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
+- 💾 **Database**：Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database).
+- 🧠 **Model**: Download the model checkpoints from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results).
 
 ## 5. Information of maintainers
 
