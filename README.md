@@ -9,6 +9,10 @@
 > **Authors**: Ruixi Chen, Miaomiao Li, Jia Long, Qiong Yang, Ting Xie, Shuqing Huang, Yufei Wang, Hongmei Lu, and Zhimin Zhang
 
 ---
+[![python_sup](https://img.shields.io/badge/python-3.14.6-black.svg?)](https://www.python.org/downloads/release/python-31012/)
+[![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-Demo-yelow.svg)](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio)
+[![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/crxcsu/CSU-EI/analyzer/Interacting_with_CSUEI_colab.ipynb) 
 
 ## 1. Overview
 
