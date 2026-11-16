@@ -12,8 +12,8 @@
 
 [![python_sup](https://img.shields.io/badge/python-3.14.6-black.svg?)](https://www.python.org/downloads/release/python-3146/)
 [![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-Demo-yellow.svg)](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio)
-[![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database)
-[![Model](https://img.shields.io/badge/🧠%20Model-CSUEI-red)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results)
+[![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database)
+[![Model](https://img.shields.io/badge/🧠%20Model-CSUEI-red)](https://huggingface.co/datasets/zzm-csu/CSUEI_database)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/crxcsu/CSU-EI/blob/master/analyzer/Interacting_with_CSUEI_colab.ipynb)
 
 ## 1. Overview
@@ -110,8 +110,8 @@ We provide an online **CSU-EI Web Server** that allows users to:
 - 🧮 **Cosine similarity**: Compute the similarity score between a SMILES and an EI mass spectrum via L2-normalized CSU-EI encoders.
 - 📍 **Molecule localization**: Map a SMILES list onto an acquired GC-MS `.cdf` file, output as a similarity heatmap and CSV report.
 - 🌐 **Online demo**: Try the web server on Hugging Face Spaces at [CSUEI\_gradio](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio).
-- 💾 **Database**: Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database).
-- 🧠 **Model**: Download the model checkpoints from [CSUEI\_model](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results).
+- 💾 **Database**: Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
+- 🧠 **Model**: Download the model checkpoints from [CSUEI\_model](https://huggingface.co/datasets/zzm-csu/CSUEI_database).
 
 ## 5. Information of maintainers
 
