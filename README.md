@@ -111,7 +111,7 @@ We provide an online **CSU-EI Web Server** that allows users to:
 - 📍 **Molecule localization**: Map a SMILES list onto an acquired GC-MS `.cdf` file, output as a similarity heatmap and CSV report.
 - 🌐 **Online demo**: Try the web server on Hugging Face Spaces at [CSUEI\_gradio](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio).
 - 💾 **Database**: Download the pre-built libraries, including the **100M molecular library** (`CSU-EI-DB_100M`), from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database).
-- 🧠 **Model**: Download the model checkpoints from [CSUEI\_database](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results).
+- 🧠 **Model**: Download the model checkpoints from [CSUEI\_model](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results).
 
 ## 5. Information of maintainers
 
