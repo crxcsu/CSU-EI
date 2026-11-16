@@ -56,6 +56,7 @@ The repository is organized around model training, mass-spectrometry data proces
 CSU-EI/
 ├── analyzer/
 │   ├── Interacting_with_CSUEI.ipynb
+│   ├── Interacting_with_CSUEI_colab.ipynb
 │   └── core.py
 ├── configs/
 │   └── config.json
