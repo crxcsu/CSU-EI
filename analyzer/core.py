@@ -387,23 +387,26 @@ def get_data_and_features(config_path, data, batch_size=1, epoch=None, MAIN_PATH
     """
     with open(os.path.join(MAIN_PATH, config_path), 'r') as f:
             config_json = json.loads(f.read())
+    config_json["model_config"]["roberta_model_path"] = None
     exp_dir = config_json["training_config"]["experiment_dir"]
     time_stamp = '_'.join(exp_dir.split('_')[-2:]) 
 
     smiles_ids, smiles_mask, mz, intensity, ms_mask = load_analysis_data(data, config_json)
 
-    if epoch is not None:
+    if epoch is not None and epoch != 0:
         model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_epoch{epoch}_{time_stamp}.pth')
+    elif epoch == 0:
+        model_path = None
     else:    
         model_path = os.path.join(MAIN_PATH, exp_dir, f'checkpoints/trained_model_{time_stamp}.pth')
-    model_dict = torch.load(model_path, map_location=config_json["device"])
 
-    config_json["model_config"]["roberta_model_path"] = None
-    if "ms_use_se" not in config_json["model_config"]:
-        config_json["model_config"]["ms_use_se"] = True
+    # if "ms_use_se" not in config_json["model_config"]:
+    #     config_json["model_config"]["ms_use_se"] = True
         
     model = CSUEI(**config_json["model_config"])
-    model.load_state_dict(model_dict, strict=False)
+    if model_path is not None:
+        model_dict = torch.load(model_path, map_location=config_json["device"])
+        model.load_state_dict(model_dict, strict=False)
     model.to(config_json["device"])
     model.eval()
 
@@ -514,19 +517,18 @@ def plot_distance_curve(distance_record_csv_path, fig_save_path):
     epoch_list = df['epoch'].tolist()
     train_distance_list = df['train_distance'].tolist()
     train_similarity_list = [1.0 - d for d in train_distance_list]
-    fig, ax1 = plt.subplots(figsize=(5, 5))
+    fig, ax1 = plt.subplots(figsize=(10, 10))
     ax1.set_xlabel('Epoch', fontsize=20)
     ax1.set_ylabel('Cosine Similarity', fontsize=20)
     line1, = ax1.plot(epoch_list, train_similarity_list, color='red', linestyle='--',
                       linewidth=1.2, label='Train Cosine Similarity')
-    ax1.tick_params(axis='both', labelsize=13)
+    ax1.tick_params(axis='both', labelsize=20)
     lines = [line1]
     labels = [l.get_label() for l in lines]
-    ax1.legend(lines, labels, loc='right', fontsize=14)
+    ax1.legend(lines, labels, loc='right', fontsize=20)
     fig.tight_layout()
     if fig_save_path is not None:
-        plt.savefig(fig_save_path, dpi=300)
-
+        plt.savefig(fig_save_path, format="svg",bbox_inches="tight", pad_inches=0.02)
 
 def save_aspirin_feature(model,config_json, epoch):
     model.eval()
