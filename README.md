@@ -13,7 +13,7 @@
 [![python_sup](https://img.shields.io/badge/python-3.14.6-black.svg?)](https://www.python.org/downloads/release/python-3146/)
 [![Hugging Face Spaces](https://img.shields.io/badge/🤗%20Spaces-Demo-yellow.svg)](https://huggingface.co/spaces/zzm-csu/CSUEI_gradio)
 [![Database](https://img.shields.io/badge/💾%20Database-100M-green)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/database)
-[![Model](https://img.shields.io/badge/🧠%25Model-CSUEI-red)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results)
+[![Model](https://img.shields.io/badge/🧠%20Model-CSUEI-red)](https://huggingface.co/datasets/zzm-csu/CSUEI_database/results)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/crxcsu/CSU-EI/blob/master/analyzer/Interacting_with_CSUEI_colab.ipynb)
 
 ## 1. Overview
