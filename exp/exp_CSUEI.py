@@ -70,10 +70,11 @@ def main(main_path, seed=2023, config_file="config.json"):
         train(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
     else:
         train_DDP(tr_set, dv_set, model, config_json, time_stamp, LOG_DIR)
-    
-    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"))
-    auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"),
-                   dev_path="data/nist23_data/dev23/dev_index_list.json")
+
+    if not dist.is_initialized() or dist.get_rank() == 0:
+        auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"))
+        auto_eval_topk(os.path.join(config_json["training_config"]["experiment_dir"], f"config_{time_stamp}.json"),
+                    dev_path="data/nist23_data/dev23/dev_index_list.json")
     
     with open(os.path.join(main_path, 'configs', f"config_{time_stamp}.json"), 'w') as f:
         json.dump(config_json, f, indent=True)
@@ -86,7 +87,6 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     
     model_path = LOG_DIR + config['model_save_path'] + model_suffix + '.pth'
     model_temp_path = LOG_DIR + config['model_save_path_temp'] + model_suffix + '.pth'
-    # loss_record_path = LOG_DIR + config['loss_record_path'] + model_suffix + '.pth'
     loss_record_csv_path = LOG_DIR + config['loss_record_path'] + model_suffix + '.csv'
 
     loss = NTXentLoss(device, temperature=config['temperature'], alpha_weight=config['alpha_weight'])
@@ -98,20 +98,6 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
        ]
     optimizer = torch.optim.AdamW(params=optimizer_grouped_parameters, lr=config['lr'], weight_decay=config['weight_decay'])
 
-    if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
-        state = torch.load(model_temp_path)
-        model.load_state_dict(state['model'], strict=False)
-        df = pd.read_csv(loss_record_csv_path)
-        early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
-        epoch = int(df.iloc[-1]['epoch'])
-        max_dev_top1 = df['dev_top1'].max()
-        dev_min_loss = df.loc[df['dev_top1'].idxmax()]['dev_loss']
-    else:
-        early_stop_cnt = 0
-        epoch = 0
-        max_dev_top1 = 0
-        dev_min_loss = float('inf')
-    
     # ------Freeze parameters of pretrained Roberta model----------------
     # for name, para in model.named_parameters():
     #     if "Smiles_model.model.embeddings" in name:
@@ -127,9 +113,26 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     #                                             num_training_steps=total_steps, num_cycles=20)  # restart recover learning rate
     scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
                                                 num_training_steps=total_steps)
-
     scaler = GradScaler()   # For mixed precision training
     model.to(device)
+
+    if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
+        ckpt = torch.load(model_temp_path, map_location=device)
+        model.load_state_dict(ckpt['model'], strict=True)
+        optimizer.load_state_dict(ckpt['optimizer'])
+        scheduler.load_state_dict(ckpt['scheduler'])
+        scaler.load_state_dict(ckpt['scaler'])
+
+        df = pd.read_csv(loss_record_csv_path)
+        early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
+        epoch = int(df.iloc[-1]['epoch'])
+        max_dev_top1 = df['dev_top1'].max()
+        dev_min_loss = df.loc[df['dev_top1'].idxmax()]['dev_loss']
+    else:
+        early_stop_cnt = 0
+        epoch = 0
+        max_dev_top1 = 0
+        dev_min_loss = float('inf')
     
     while epoch < n_epochs:
         model.train()
@@ -195,7 +198,12 @@ def train(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
         else:
             early_stop_cnt += 1
         
-        torch.save(model.state_dict(), model_temp_path)
+        torch.save({
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'scheduler': scheduler.state_dict(),
+            'scaler': scaler.state_dict(),
+        }, model_temp_path)
 
         current_data = {
                 'timestamp': current_time,
@@ -261,21 +269,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     n_epochs = config['n_epochs']
     model_path = LOG_DIR + config['model_save_path'] + model_suffix + '.pth'
     model_temp_path = LOG_DIR + config['model_save_path_temp'] + model_suffix + '.pth'
-    # loss_record_path = LOG_DIR + config['loss_record_path'] + model_suffix + '.pth'
     loss_record_csv_path = LOG_DIR + config['loss_record_path'] + model_suffix + '.csv'
-    if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
-        state = torch.load(model_temp_path, map_location=device)
-        model.load_state_dict(state)
-        df = pd.read_csv(loss_record_csv_path)
-        early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
-        epoch = int(df.iloc[-1]['epoch'])
-        max_dev_top1 = df['dev_top1'].max()
-        dev_min_loss = df.loc[df['dev_top1'].idxmax()]['dev_loss']
-    else:
-        early_stop_cnt = 0
-        epoch = 0
-        max_dev_top1 = 0
-        dev_min_loss = float('inf')
     
     # ------Freeze parameters of pretrained Roberta model----------------
     # for name, para in model.named_parameters():
@@ -289,10 +283,28 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
     # Warm up and learning rate decay
     # scheduler = get_cosine_with_hard_restarts_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
     #                                             num_training_steps=total_steps, num_cycles=20)  # restart recover learning rate
-    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=config["warm_up_step"],
+    scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps= max(1, config["warm_up_step"] // world_size), 
                                                 num_training_steps=len(train_loader)*n_epochs)
-
     scaler = GradScaler()   # For mixed precision training
+
+    if os.path.exists(model_temp_path) and os.path.exists(loss_record_csv_path):
+        ckpt = torch.load(model_temp_path, map_location=device)
+        model.load_state_dict(ckpt['model'], strict=True)
+        optimizer.load_state_dict(ckpt['optimizer'])
+        scheduler.load_state_dict(ckpt['scheduler'])
+        scaler.load_state_dict(ckpt['scaler'])
+
+        df = pd.read_csv(loss_record_csv_path)
+        early_stop_cnt = int(df.iloc[-1]['early_stop_cnt'])
+        epoch = int(df.iloc[-1]['epoch'])
+        max_dev_top1 = df['dev_top1'].max()
+        dev_min_loss = df.loc[df['dev_top1'].idxmax()]['dev_loss']
+    else:
+        early_stop_cnt = 0
+        epoch = 0
+        max_dev_top1 = 0
+        dev_min_loss = float('inf')
+
     while epoch < n_epochs:
         train_sampler.set_epoch(epoch)
         model.train()
@@ -345,7 +357,7 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
 
         if rank==0:
             # After each epoch, test your model on the validation (development) set.
-            raw_model=model.module
+            raw_model = model.module
             dev_loss, dev_top1 = dev(dv_set, raw_model, device)
 
             # early stopping
@@ -359,6 +371,13 @@ def train_DDP(tr_set, dv_set, model, config_json, model_suffix, LOG_DIR):
             else:
                 early_stop_cnt += 1            
 
+            torch.save({
+                'model': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+                'scaler': scaler.state_dict(),
+            }, model_temp_path)
+            
             # record
             avg_train_loss = avg_loss_tensor.item() / world_size
             avg_train_distance = avg_distance_tensor.item() / world_size
